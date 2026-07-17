@@ -3,14 +3,15 @@ import type { ModelProviderConfig } from "openclaw/plugin-sdk/provider-model-sha
 import type { ProviderCatalogContext } from "openclaw/plugin-sdk/provider-catalog-shared";
 import { getCachedLiveCatalogValue } from "openclaw/plugin-sdk/provider-catalog-shared";
 import {
+  OMNIROUTE_BASE_URL_ENV_VAR,
   buildOmniRouteDefaultModel,
   OMNIROUTE_DEFAULT_BASE_URL,
   OMNIROUTE_DEFAULT_MODEL_ID,
 } from "./models.js";
 
-export function buildOmniRouteProvider(): ModelProviderConfig {
+export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL): ModelProviderConfig {
   return {
-    baseUrl: OMNIROUTE_DEFAULT_BASE_URL,
+    baseUrl: normalizeBaseUrl(baseUrl),
     api: "openai-completions",
     models: [buildOmniRouteDefaultModel()],
   };
@@ -54,9 +55,16 @@ function normalizeBaseUrl(value: unknown): string {
     : OMNIROUTE_DEFAULT_BASE_URL;
 }
 
-function resolveConfiguredBaseUrl(config: ProviderCatalogContext["config"]): string {
+function resolveConfiguredBaseUrl(ctx: ProviderCatalogContext): string {
+  const config = ctx.config;
   const provider = config.models?.providers?.omniroute;
-  return normalizeBaseUrl(provider?.baseUrl);
+  const configuredBaseUrl = normalizeBaseUrl(provider?.baseUrl);
+  const envBaseUrl = ctx.env[OMNIROUTE_BASE_URL_ENV_VAR];
+
+  if (configuredBaseUrl !== OMNIROUTE_DEFAULT_BASE_URL) {
+    return configuredBaseUrl;
+  }
+  return normalizeBaseUrl(envBaseUrl ?? configuredBaseUrl);
 }
 
 function hasCapability(entry: OmniRouteModelEntry, key: string): boolean {
@@ -159,7 +167,7 @@ export async function fetchOmniRouteChatModels(params: {
 export async function buildLiveOmniRouteProvider(
   ctx: ProviderCatalogContext,
 ): Promise<ModelProviderConfig> {
-  const baseUrl = resolveConfiguredBaseUrl(ctx.config);
+  const baseUrl = resolveConfiguredBaseUrl(ctx);
   const auth = ctx.resolveProviderAuth("omniroute");
   const apiKey = auth.discoveryApiKey ?? auth.apiKey;
 
@@ -179,7 +187,7 @@ export async function buildLiveOmniRouteProvider(
     };
   } catch {
     return {
-      ...buildOmniRouteProvider(),
+      ...buildOmniRouteProvider(baseUrl),
       baseUrl,
     };
   }

@@ -4,7 +4,7 @@ import { defineSingleProviderPluginEntry } from "openclaw/plugin-sdk/provider-en
 import { buildProviderReplayFamilyHooks } from "openclaw/plugin-sdk/provider-model-shared";
 import { buildProviderToolCompatFamilyHooks } from "openclaw/plugin-sdk/provider-tools";
 import { applyOmniRouteConfig } from "./onboard.js";
-import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_DEFAULT_MODEL_REF, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
+import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_MODEL_REF, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { buildLiveOmniRouteProvider, buildOmniRouteProvider } from "./provider-catalog.js";
 export default defineSingleProviderPluginEntry({
     id: OMNIROUTE_PROVIDER_ID,
@@ -13,7 +13,7 @@ export default defineSingleProviderPluginEntry({
     provider: {
         label: OMNIROUTE_LABEL,
         docsPath: "/providers/omniroute",
-        envVars: [OMNIROUTE_API_KEY_ENV_VAR],
+        envVars: [OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR],
         auth: [
             {
                 methodId: "api-key",
@@ -50,7 +50,7 @@ export default defineSingleProviderPluginEntry({
             staticRun: (ctx) => buildSingleProviderApiKeyCatalog({
                 ctx,
                 providerId: OMNIROUTE_PROVIDER_ID,
-                buildProvider: buildOmniRouteProvider,
+                buildProvider: () => buildOmniRouteProvider(ctx.env[OMNIROUTE_BASE_URL_ENV_VAR]),
                 allowExplicitBaseUrl: true,
             }),
         },

@@ -1,8 +1,8 @@
 import { getCachedLiveCatalogValue } from "openclaw/plugin-sdk/provider-catalog-shared";
-import { buildOmniRouteDefaultModel, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_DEFAULT_MODEL_ID, } from "./models.js";
-export function buildOmniRouteProvider() {
+import { OMNIROUTE_BASE_URL_ENV_VAR, buildOmniRouteDefaultModel, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_DEFAULT_MODEL_ID, } from "./models.js";
+export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL) {
     return {
-        baseUrl: OMNIROUTE_DEFAULT_BASE_URL,
+        baseUrl: normalizeBaseUrl(baseUrl),
         api: "openai-completions",
         models: [buildOmniRouteDefaultModel()],
     };
@@ -24,9 +24,15 @@ function normalizeBaseUrl(value) {
         ? value.trim().replace(/\/+$/, "")
         : OMNIROUTE_DEFAULT_BASE_URL;
 }
-function resolveConfiguredBaseUrl(config) {
+function resolveConfiguredBaseUrl(ctx) {
+    const config = ctx.config;
     const provider = config.models?.providers?.omniroute;
-    return normalizeBaseUrl(provider?.baseUrl);
+    const configuredBaseUrl = normalizeBaseUrl(provider?.baseUrl);
+    const envBaseUrl = ctx.env[OMNIROUTE_BASE_URL_ENV_VAR];
+    if (configuredBaseUrl !== OMNIROUTE_DEFAULT_BASE_URL) {
+        return configuredBaseUrl;
+    }
+    return normalizeBaseUrl(envBaseUrl ?? configuredBaseUrl);
 }
 function hasCapability(entry, key) {
     if (!isRecord(entry.capabilities)) {
@@ -108,7 +114,7 @@ export async function fetchOmniRouteChatModels(params) {
     return ensureDefaultModel(models);
 }
 export async function buildLiveOmniRouteProvider(ctx) {
-    const baseUrl = resolveConfiguredBaseUrl(ctx.config);
+    const baseUrl = resolveConfiguredBaseUrl(ctx);
     const auth = ctx.resolveProviderAuth("omniroute");
     const apiKey = auth.discoveryApiKey ?? auth.apiKey;
     try {
@@ -127,7 +133,7 @@ export async function buildLiveOmniRouteProvider(ctx) {
     }
     catch {
         return {
-            ...buildOmniRouteProvider(),
+            ...buildOmniRouteProvider(baseUrl),
             baseUrl,
         };
     }

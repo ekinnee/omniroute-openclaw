@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
-function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string }) {
+function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string; envBaseUrl?: string }) {
   return {
     config: {
       models: {
@@ -17,7 +17,9 @@ function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string }) {
         },
       },
     },
-    env: {},
+    env: {
+      OMNIROUTE_BASE_URL: overrides?.envBaseUrl,
+    },
     resolveProviderApiKey: () => ({ apiKey: overrides?.apiKey }),
     resolveProviderAuth: () => ({
       apiKey: overrides?.apiKey,
@@ -60,6 +62,7 @@ describe("omniroute provider plugin", () => {
     const mod = await import("./models.js");
     expect(mod.OMNIROUTE_PROVIDER_ID).toBe("omniroute");
     expect(mod.OMNIROUTE_API_KEY_ENV_VAR).toBe("OMNIROUTE_API_KEY");
+    expect(mod.OMNIROUTE_BASE_URL_ENV_VAR).toBe("OMNIROUTE_BASE_URL");
     expect(mod.OMNIROUTE_DEFAULT_BASE_URL).toBe("http://localhost:20128/v1");
     expect(mod.OMNIROUTE_DEFAULT_MODEL_REF).toBe("omniroute/auto");
   });
@@ -144,6 +147,59 @@ describe("omniroute provider plugin", () => {
 
     expect(catalog.baseUrl).toBe("http://omniroute.example/v1");
     expect(catalog.models.map((model) => model.id)).toEqual(["auto"]);
+  });
+
+  it("uses OMNIROUTE_BASE_URL when no config base URL is set", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 503,
+    } as never);
+
+    const catalog = await buildLiveOmniRouteProvider(
+      mockCatalogContext({
+        envBaseUrl: "http://env-omniroute.example/v1/",
+        apiKey: "secret-key",
+      }),
+    );
+
+    expect(catalog.baseUrl).toBe("http://env-omniroute.example/v1");
+  });
+
+  it("uses OMNIROUTE_BASE_URL when config only has the default base URL", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 503,
+    } as never);
+
+    const catalog = await buildLiveOmniRouteProvider(
+      mockCatalogContext({
+        baseUrl: "http://localhost:20128/v1",
+        envBaseUrl: "http://env-omniroute.example/v1",
+        apiKey: "secret-key",
+      }),
+    );
+
+    expect(catalog.baseUrl).toBe("http://env-omniroute.example/v1");
+  });
+
+  it("prefers config base URL over OMNIROUTE_BASE_URL", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 503,
+    } as never);
+
+    const catalog = await buildLiveOmniRouteProvider(
+      mockCatalogContext({
+        baseUrl: "http://config-omniroute.example/v1",
+        envBaseUrl: "http://env-omniroute.example/v1",
+        apiKey: "secret-key",
+      }),
+    );
+
+    expect(catalog.baseUrl).toBe("http://config-omniroute.example/v1");
   });
 
   it("applies config without errors", async () => {
