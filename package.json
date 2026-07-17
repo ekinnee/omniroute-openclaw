@@ -4,6 +4,7 @@
   "private": false,
   "description": "OpenClaw OmniRoute provider plugin",
   "type": "module",
+  "packageManager": "pnpm@9.15.4",
   "peerDependencies": {
     "openclaw": ">=2026.3.24-beta.2"
   },
