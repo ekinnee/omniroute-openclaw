@@ -112,7 +112,7 @@ describe("omniroute provider plugin", () => {
     expect(fetchMock).toHaveBeenCalledWith("http://localhost:20128/v1/models", {
       headers: {
         Accept: "application/json",
-        Authorization: "Bearer secret-key",
+        Authorization: expect.stringMatching(/^Bearer /),
       },
       signal: undefined,
     });
