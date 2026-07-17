@@ -1,5 +1,8 @@
 // OmniRoute plugin entrypoint registers its OpenClaw integration.
-import { readConfiguredProviderCatalogEntries } from "openclaw/plugin-sdk/provider-catalog-shared";
+import {
+  buildSingleProviderApiKeyCatalog,
+  readConfiguredProviderCatalogEntries,
+} from "openclaw/plugin-sdk/provider-catalog-shared";
 import { defineSingleProviderPluginEntry } from "openclaw/plugin-sdk/provider-entry";
 import { buildProviderReplayFamilyHooks } from "openclaw/plugin-sdk/provider-model-shared";
 import { buildProviderToolCompatFamilyHooks } from "openclaw/plugin-sdk/provider-tools";
@@ -10,7 +13,7 @@ import {
   OMNIROUTE_LABEL,
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
-import { buildOmniRouteProvider } from "./provider-catalog.js";
+import { buildLiveOmniRouteProvider, buildOmniRouteProvider } from "./provider-catalog.js";
 
 export default defineSingleProviderPluginEntry({
   id: OMNIROUTE_PROVIDER_ID,
@@ -47,9 +50,20 @@ export default defineSingleProviderPluginEntry({
       },
     ],
     catalog: {
-      buildProvider: buildOmniRouteProvider,
-      buildStaticProvider: buildOmniRouteProvider,
-      allowExplicitBaseUrl: true,
+      run: (ctx) =>
+        buildSingleProviderApiKeyCatalog({
+          ctx,
+          providerId: OMNIROUTE_PROVIDER_ID,
+          buildProvider: () => buildLiveOmniRouteProvider(ctx),
+          allowExplicitBaseUrl: true,
+        }),
+      staticRun: (ctx) =>
+        buildSingleProviderApiKeyCatalog({
+          ctx,
+          providerId: OMNIROUTE_PROVIDER_ID,
+          buildProvider: buildOmniRouteProvider,
+          allowExplicitBaseUrl: true,
+        }),
     },
     augmentModelCatalog: ({ config }) =>
       readConfiguredProviderCatalogEntries({

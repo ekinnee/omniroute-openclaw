@@ -1,12 +1,38 @@
 // OmniRoute provider plugin tests — standalone compatible
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string }) {
+  return {
+    config: {
+      models: {
+        providers: {
+          omniroute: {
+            baseUrl: overrides?.baseUrl,
+          },
+        },
+      },
+    },
+    env: {},
+    resolveProviderApiKey: () => ({ apiKey: overrides?.apiKey }),
+    resolveProviderAuth: () => ({
+      apiKey: overrides?.apiKey,
+      discoveryApiKey: overrides?.apiKey,
+      mode: "api_key",
+      source: overrides?.apiKey ? "env" : "none",
+    }),
+  } as never;
+}
+
 describe("omniroute provider plugin", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it("has a valid package.json", () => {
     const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf8"));
     expect(pkg.name).toBe("@ekinnee/omniroute-provider");
@@ -45,6 +71,79 @@ describe("omniroute provider plugin", () => {
     expect(catalog.api).toBe("openai-completions");
     expect(catalog.models).toHaveLength(1);
     expect(catalog.models![0].id).toBe("auto");
+  });
+
+  it("maps live OmniRoute chat models and filters non-chat models", async () => {
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "if/kimi-k2",
+            object: "model",
+            name: "Kimi K2",
+            type: "chat",
+            context_length: 262_144,
+            max_output_tokens: 32_768,
+            input_modalities: ["text", "image"],
+            capabilities: { tool_calling: true, reasoning: true },
+          },
+          {
+            id: "nebius/Qwen/Qwen3-Embedding-8B",
+            type: "embedding",
+          },
+          {
+            id: "openai/dall-e-3",
+            type: "image",
+          },
+        ],
+      }),
+    } as never);
+
+    const models = await fetchOmniRouteChatModels({
+      baseUrl: "http://localhost:20128/v1/",
+      apiKey: "secret-key",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:20128/v1/models", {
+      headers: {
+        Accept: "application/json",
+        Authorization: "Bearer secret-key",
+      },
+      signal: undefined,
+    });
+    expect(models.map((model) => model.id)).toEqual(["auto", "if/kimi-k2"]);
+    expect(models[1]).toMatchObject({
+      name: "Kimi K2",
+      reasoning: true,
+      input: ["text", "image"],
+      contextWindow: 262_144,
+      maxTokens: 32_768,
+      compat: {
+        supportsUsageInStreaming: true,
+        supportsTools: true,
+      },
+    });
+  });
+
+  it("falls back to the static auto model when live discovery fails", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: false,
+      status: 401,
+      text: async () => "secret-key should not be read into errors",
+    } as never);
+
+    const catalog = await buildLiveOmniRouteProvider(
+      mockCatalogContext({
+        baseUrl: "http://omniroute.example/v1",
+        apiKey: "secret-key",
+      }),
+    );
+
+    expect(catalog.baseUrl).toBe("http://omniroute.example/v1");
+    expect(catalog.models.map((model) => model.id)).toEqual(["auto"]);
   });
 
   it("applies config without errors", async () => {
