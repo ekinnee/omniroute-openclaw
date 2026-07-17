@@ -10,7 +10,7 @@
   },
   "openclaw": {
     "extensions": [
-      "./index.ts"
+      "./dist/index.js"
     ],
     "compat": {
       "pluginApi": ">=2026.3.24-beta.2",
@@ -22,9 +22,12 @@
     }
   },
   "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^7.0.2",
     "vitest": "^4.1.10"
   },
   "scripts": {
-    "test": "vitest run"
+    "test": "vitest run",
+    "build": "tsc"
   }
 }
