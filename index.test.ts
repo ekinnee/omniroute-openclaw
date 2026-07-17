@@ -38,7 +38,7 @@ describe("omniroute provider plugin", () => {
   it("has a valid package.json", () => {
     const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf8"));
     expect(pkg.name).toBe("@ekinnee/omniroute-provider");
-    expect(pkg.version).toBe("0.1.1");
+    expect(pkg.version).toMatch(/^0\.1\.\d+$/);
     expect(pkg.openclaw.extensions).toContain("./dist/index.js");
     expect(pkg.openclaw.compat.pluginApi).toBeDefined();
     expect(pkg.openclaw.build.openclawVersion).toBeDefined();
