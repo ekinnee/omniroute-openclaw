@@ -15,6 +15,6 @@ jobs:
     uses: openclaw/clawhub/.github/workflows/package-publish.yml@main
     with:
       source: ekinnee/omniroute-openclaw
-      dry_run: ${{ github.event_name == 'workflow_dispatch' && inputs.dry_run || false }}
+      dry_run: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.dry_run == 'true' }}
     secrets:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
