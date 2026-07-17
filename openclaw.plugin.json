@@ -1,7 +1,8 @@
 {
   "id": "omniroute",
   "name": "OmniRoute",
-  "description": "OpenClaw OmniRoute text inference provider plugin.",
+  "description": "OmniRoute multi-provider model router as a first-class OpenClaw text inference provider. 40+ models, 7 providers, automatic fallback, live model discovery.",
+  "tags": ["omniroute", "model-routing", "multi-provider", "openai-compatible", "inference"],
   "activation": {
     "onStartup": false
   },
