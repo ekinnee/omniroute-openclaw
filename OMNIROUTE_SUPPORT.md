@@ -14,8 +14,8 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Live chat model discovery: `GET /v1/models`
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 - Image generation provider: `omniroute`, backed by `POST /v1/images/generations`
-- Latest released plugin version: `0.1.5`
-- Next planned capability: web search through `GET/POST /v1/search`
+- Latest released plugin version: `1.0.0`
+- Next planned capability: speech (TTS) through `POST /v1/audio/speech`
 
 The text provider uses OmniRoute's live model catalog when available and filters the response to chat-capable rows. Successful live discovery treats `GET /v1/models` as the source of truth; `auto` is only added by the static fallback path when live discovery fails. Embeddings and image generation require explicit models from OmniRoute's model catalog and never synthesize `auto`.
 
@@ -28,10 +28,10 @@ The text provider uses OmniRoute's live model catalog when available and filters
 | `POST /v1/embeddings` | Embedding provider | ✅ Initial support |
 | `POST /v1/images/generations` | Image generation provider | ✅ Initial support |
 | `POST /v1/images/edits` | Image generation/edit provider | 🔜 Planned (part of ImageGenerationProvider edit capability) |
-| `GET/POST /v1/search` | Web search provider (`registerWebSearchProvider`) | 🔜 Next planned |
+| `GET/POST /v1/search` | Web search provider (`registerWebSearchProvider`) | ✅ Initial support |
 | `POST /v1/audio/speech` | Speech provider (`registerSpeechProvider`) | 🔜 Planned |
 | `POST /v1/audio/transcriptions` | Realtime transcription provider (`registerRealtimeTranscriptionProvider`) | 🔜 Planned |
-| `POST /v1/videos/generations` | Video generation provider (`registerVideoGenerationProvider`) | 🔜 Planned |
+| `POST /v1/videos/generations` | Video generation provider (`registerVideoGenerationProvider`) | ✅ Initial support |
 | `POST /v1/music/generations` | Music generation provider (`registerMusicGenerationProvider`) | 🔜 Planned |
 | `POST /v1/responses` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
 | `POST /v1/completions` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
@@ -48,11 +48,11 @@ The text provider uses OmniRoute's live model catalog when available and filters
 1. Keep live catalog handling aligned with OmniRoute's `GET /v1/models` response: preserve ids exactly, include untyped chat/combo/provider rows, honor `supported_endpoints`, and avoid synthesizing live-only models.
 2. Keep embedding model handling explicit: filter `GET /v1/models` to embedding-capable rows, preserve ids exactly, include dimensionality in runtime/cache identity when OpenClaw provides it, and fail clearly when no embedding model is configured.
 3. Keep image generation explicit and generation-only for the first cut: filter `GET /v1/models` to image-capable rows, preserve ids exactly, pass size/count through to `/v1/images/generations`, and reject reference images until edits are implemented.
-4. Add web search support: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
+4. ~~Add web search support~~ ✅ Done: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
 5. Add image edits: extend the existing `ImageGenerationProvider` to support the `edit` capability, mapping to OmniRoute's `/v1/images/edits`.
 6. Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.
 7. Add transcription (STT): register via `registerRealtimeTranscriptionProvider`, mapping to OmniRoute's `POST /v1/audio/transcriptions`.
-8. Add video generation: register via `registerVideoGenerationProvider`, mapping to OmniRoute's `POST /v1/videos/generations`.
+8. ~~Add video generation~~ ✅ Done: register via `registerVideoGenerationProvider`, mapping to OmniRoute's `POST /v1/videos/generations`.
 9. Add music generation: register via `registerMusicGenerationProvider`, mapping to OmniRoute's `POST /v1/music/generations`.
 
 ### Upstream OpenClaw PRs needed (no plugin surface yet)
