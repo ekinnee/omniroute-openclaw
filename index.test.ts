@@ -5,6 +5,13 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const MIN_OPENCLAW_VERSION = "2026.5.22";
+const REQUIRED_OPENCLAW_SDK_EXPORTS = [
+  "./plugin-sdk/embedding-providers",
+  "./plugin-sdk/image-generation",
+  "./plugin-sdk/provider-auth-runtime",
+  "./plugin-sdk/provider-http",
+] as const;
 
 const embeddingProviderMocks = vi.hoisted(() => ({
   getEmbeddingProvider: vi.fn(),
@@ -85,6 +92,20 @@ describe("omniroute provider plugin", () => {
     expect(pkg.openclaw.extensions).toContain("./dist/index.js");
     expect(pkg.openclaw.compat.pluginApi).toBeDefined();
     expect(pkg.openclaw.build.openclawVersion).toBeDefined();
+  });
+
+  it("declares an OpenClaw floor that covers imported SDK subpaths", () => {
+    const pkg = JSON.parse(readFileSync(resolve(__dirname, "package.json"), "utf8"));
+    const openClawPkg = JSON.parse(
+      readFileSync(resolve(__dirname, "node_modules/openclaw/package.json"), "utf8"),
+    );
+
+    expect(pkg.peerDependencies.openclaw).toBe(`>=${MIN_OPENCLAW_VERSION}`);
+    expect(pkg.openclaw.compat.pluginApi).toBe(`>=${MIN_OPENCLAW_VERSION}`);
+    expect(pkg.openclaw.compat.minGatewayVersion).toBe(MIN_OPENCLAW_VERSION);
+    for (const exportPath of REQUIRED_OPENCLAW_SDK_EXPORTS) {
+      expect(openClawPkg.exports[exportPath]).toBeDefined();
+    }
   });
 
   it("has a valid manifest", () => {

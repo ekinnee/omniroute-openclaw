@@ -52,7 +52,7 @@ Configure an explicit embedding model from OmniRoute's `GET /v1/models` response
 ```json5
 {
   agents: {
-    default: {
+    defaults: {
       memorySearch: {
         provider: "omniroute",
         model: "provider/embedding-model-from-omniroute",
