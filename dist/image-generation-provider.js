@@ -75,7 +75,9 @@ export function buildOmniRouteImageGenerationProvider() {
                 transport: "http",
             });
             const requestHeaders = new Headers(headers);
-            requestHeaders.set("Content-Type", "application/json");
+            if (!requestHeaders.has("Content-Type")) {
+                requestHeaders.set("Content-Type", "application/json");
+            }
             const request = await postJsonRequest({
                 url: `${baseUrl.replace(/\/+$/, "")}/images/generations`,
                 headers: requestHeaders,

@@ -262,7 +262,7 @@ describe("omniroute provider plugin", () => {
     expect(models[0]).toMatchObject({
       id: "auto/best-coding",
       contextWindow: 200_000,
-      reasoning: true,
+      reasoning: false,
     });
     expect(models[1]).toMatchObject({
       id: "openrouter/google/gemini-pro",

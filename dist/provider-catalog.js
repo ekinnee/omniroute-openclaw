@@ -1,5 +1,7 @@
 import { getCachedLiveCatalogValue } from "openclaw/plugin-sdk/provider-catalog-shared";
-import { OMNIROUTE_BASE_URL_ENV_VAR, buildOmniRouteDefaultModel, OMNIROUTE_DEFAULT_BASE_URL, } from "./models.js";
+import { createSubsystemLogger } from "openclaw/plugin-sdk/core";
+import { OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_MODEL_ID, buildOmniRouteDefaultModel, OMNIROUTE_DEFAULT_BASE_URL, } from "./models.js";
+const log = createSubsystemLogger("omniroute");
 export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL) {
     return {
         baseUrl: normalizeBaseUrl(baseUrl),
@@ -121,7 +123,7 @@ function isImageModelEntry(entry) {
     }
     return IMAGE_MODEL_TYPES.has(entry.type.trim().toLowerCase());
 }
-export function buildOmniRouteModelFromCatalogEntry(entry) {
+function buildOmniRouteModelFromCatalogEntry(entry) {
     const id = typeof entry.id === "string" ? entry.id.trim() : "";
     if (!id || !isChatModelEntry(entry)) {
         return null;
@@ -131,7 +133,7 @@ export function buildOmniRouteModelFromCatalogEntry(entry) {
         name: (typeof entry.name === "string" && entry.name.trim()) ||
             (typeof entry.root === "string" && entry.root.trim()) ||
             id,
-        reasoning: hasCapability(entry, "reasoning") || hasCapability(entry, "thinking") || id.startsWith("auto"),
+        reasoning: hasCapability(entry, "reasoning") || hasCapability(entry, "thinking") || id === OMNIROUTE_DEFAULT_MODEL_ID,
         input: normalizeInputModalities(entry),
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
         contextWindow: readPositiveNumber(entry.context_length, entry.max_input_tokens, entry.contextWindow) ??
@@ -173,10 +175,9 @@ export function buildOmniRouteImageModelFromCatalogEntry(entry) {
         inputModalities: normalizeTrimmedStringArray(entry.input_modalities),
     };
 }
-export async function fetchOmniRouteChatModels(params) {
-    const headers = {
-        Accept: "application/json",
-    };
+// Generic fetch helper
+async function fetchOmniRouteModels(params, builder, errorLabel) {
+    const headers = { Accept: "application/json" };
     if (params.apiKey) {
         headers.Authorization = `Bearer ${params.apiKey}`;
     }
@@ -185,7 +186,7 @@ export async function fetchOmniRouteChatModels(params) {
         signal: params.signal,
     });
     if (!response.ok) {
-        throw new Error(`OmniRoute model catalog request failed with HTTP ${response.status}`);
+        throw new Error(`OmniRoute ${errorLabel} model catalog request failed with HTTP ${response.status}`);
     }
     const payload = (await response.json());
     if (!Array.isArray(payload.data)) {
@@ -194,83 +195,25 @@ export async function fetchOmniRouteChatModels(params) {
     const seen = new Set();
     const models = [];
     for (const rawEntry of payload.data) {
-        if (!isRecord(rawEntry)) {
+        if (!isRecord(rawEntry))
             continue;
-        }
-        const model = buildOmniRouteModelFromCatalogEntry(rawEntry);
-        if (!model || seen.has(model.id)) {
+        const model = builder(rawEntry);
+        if (!model || seen.has(model.id))
             continue;
-        }
         seen.add(model.id);
         models.push(model);
     }
     return models;
+}
+// Simplified functions using generic helper
+export async function fetchOmniRouteChatModels(params) {
+    return fetchOmniRouteModels(params, buildOmniRouteModelFromCatalogEntry, "chat");
 }
 export async function fetchOmniRouteEmbeddingModels(params) {
-    const headers = {
-        Accept: "application/json",
-    };
-    if (params.apiKey) {
-        headers.Authorization = `Bearer ${params.apiKey}`;
-    }
-    const response = await fetch(`${normalizeBaseUrl(params.baseUrl)}/models`, {
-        headers,
-        signal: params.signal,
-    });
-    if (!response.ok) {
-        throw new Error(`OmniRoute embedding model catalog request failed with HTTP ${response.status}`);
-    }
-    const payload = (await response.json());
-    if (!Array.isArray(payload.data)) {
-        throw new Error("OmniRoute model catalog response did not include a data array");
-    }
-    const seen = new Set();
-    const models = [];
-    for (const rawEntry of payload.data) {
-        if (!isRecord(rawEntry)) {
-            continue;
-        }
-        const model = buildOmniRouteEmbeddingModelFromCatalogEntry(rawEntry);
-        if (!model || seen.has(model.id)) {
-            continue;
-        }
-        seen.add(model.id);
-        models.push(model);
-    }
-    return models;
+    return fetchOmniRouteModels(params, buildOmniRouteEmbeddingModelFromCatalogEntry, "embedding");
 }
 export async function fetchOmniRouteImageModels(params) {
-    const headers = {
-        Accept: "application/json",
-    };
-    if (params.apiKey) {
-        headers.Authorization = `Bearer ${params.apiKey}`;
-    }
-    const response = await fetch(`${normalizeBaseUrl(params.baseUrl)}/models`, {
-        headers,
-        signal: params.signal,
-    });
-    if (!response.ok) {
-        throw new Error(`OmniRoute image model catalog request failed with HTTP ${response.status}`);
-    }
-    const payload = (await response.json());
-    if (!Array.isArray(payload.data)) {
-        throw new Error("OmniRoute model catalog response did not include a data array");
-    }
-    const seen = new Set();
-    const models = [];
-    for (const rawEntry of payload.data) {
-        if (!isRecord(rawEntry)) {
-            continue;
-        }
-        const model = buildOmniRouteImageModelFromCatalogEntry(rawEntry);
-        if (!model || seen.has(model.id)) {
-            continue;
-        }
-        seen.add(model.id);
-        models.push(model);
-    }
-    return models;
+    return fetchOmniRouteModels(params, buildOmniRouteImageModelFromCatalogEntry, "image");
 }
 export async function buildLiveOmniRouteProvider(ctx) {
     const baseUrl = resolveConfiguredBaseUrl(ctx);
@@ -290,7 +233,8 @@ export async function buildLiveOmniRouteProvider(ctx) {
             }),
         };
     }
-    catch {
+    catch (err) {
+        log.warn(`Live model discovery failed, falling back to static catalog`, { baseUrl, error: err instanceof Error ? err.message : String(err) });
         return {
             ...buildOmniRouteProvider(baseUrl),
             baseUrl,

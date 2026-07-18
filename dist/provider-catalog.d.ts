@@ -32,24 +32,6 @@ export type OmniRouteImageModel = {
     supportedSizes: string[];
     inputModalities: string[];
 };
-export declare function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry): {
-    id: string;
-    name: string;
-    reasoning: boolean;
-    input: ("image" | "text")[];
-    cost: {
-        input: number;
-        output: number;
-        cacheRead: number;
-        cacheWrite: number;
-    };
-    contextWindow: number;
-    maxTokens: number;
-    compat: {
-        supportsUsageInStreaming: boolean;
-        supportsTools: true | undefined;
-    };
-} | null;
 export declare function buildOmniRouteEmbeddingModelFromCatalogEntry(entry: OmniRouteModelEntry): OmniRouteEmbeddingModel | null;
 export declare function buildOmniRouteImageModelFromCatalogEntry(entry: OmniRouteModelEntry): OmniRouteImageModel | null;
 export declare function fetchOmniRouteChatModels(params: {
