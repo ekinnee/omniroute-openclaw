@@ -11,8 +11,29 @@ on:
         default: true
 
 jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install
+      - run: pnpm build
+      - run: pnpm pack
+      - uses: actions/upload-artifact@v4
+        with:
+          name: clawpack
+          path: ./*.tgz
+          if-no-files-found: error
+
   publish_release:
     if: github.event_name == 'release'
+    needs: build
     permissions:
       actions: read
       contents: read
@@ -21,11 +42,13 @@ jobs:
     with:
       source: ekinnee/omniroute-openclaw
       dry_run: false
+      package_artifact_name: clawpack
     secrets:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
 
   publish_dispatch:
     if: github.event_name == 'workflow_dispatch'
+    needs: build
     permissions:
       actions: read
       contents: read
@@ -34,5 +57,6 @@ jobs:
     with:
       source: ekinnee/omniroute-openclaw
       dry_run: ${{ inputs.dry_run }}
+      package_artifact_name: clawpack
     secrets:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
