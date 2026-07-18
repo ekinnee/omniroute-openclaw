@@ -1,6 +1,6 @@
 # OmniRoute Provider Plugin for OpenClaw
 
-Registers [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — a multi-provider model routing proxy — as a first-class text inference, embedding, and image generation provider in OpenClaw. Routes through **40+ models across 7 providers** with automatic fallback, live model discovery, and OpenAI-compatible transport.
+Registers [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — a multi-provider model routing proxy — as a first-class text inference, embedding, image generation, and web search provider in OpenClaw. Routes through **40+ models across 7 providers** with automatic fallback, live model discovery, and OpenAI-compatible transport.
 
 ## Quick Start
 
@@ -83,6 +83,25 @@ Configure an explicit image model from OmniRoute's `GET /v1/models` response:
 
 The initial image support is text-to-image only. Image edits and reference images remain planned. The plugin does not default image generation to `auto`; use an image-capable model that OmniRoute advertises.
 
+### Web Search
+
+OmniRoute can serve OpenClaw web search requests through `POST /v1/search`.
+The plugin registers itself as a web search provider automatically — no additional configuration needed.
+
+```json5
+{
+  tools: {
+    web: {
+      search: {
+        provider: "omniroute",
+      },
+    },
+  },
+}
+```
+
+The web search tool supports `query`, `count` (1-10), `freshness` (day/week/month/year), `country`, and `language` parameters. Results include titles, URLs, snippets, and full page content when available.
+
 ## How It Works
 
 1. **Live model discovery** — On startup, the plugin fetches `GET /v1/models` from your OmniRoute gateway and registers chat-capable rows as `omniroute/<model-id>`. Successful live discovery treats OmniRoute's catalog as the source of truth.
@@ -90,6 +109,7 @@ The initial image support is text-to-image only. Image edits and reference image
 3. **OpenAI-compatible transport** — Text requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
 4. **Explicit embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint, but require a configured embedding model instead of falling back to `auto`.
 5. **Explicit image generation** — Image requests use OmniRoute's OpenAI-compatible `POST /v1/images/generations` endpoint with a configured image model.
+6. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
 
 ## Roadmap
 
@@ -104,7 +124,7 @@ The plugin currently exposes OmniRoute as an OpenAI-compatible chat provider. Th
 | Embeddings (`/v1/embeddings`) | ✅ Initial support |
 | Image generation (`/v1/images/generations`) | ✅ Initial support |
 | Image edits (`/v1/images/edits`) | 🔜 Planned (part of ImageGenerationProvider) |
-| Web search (`/v1/search`) | 🔜 Next planned |
+| Web search (`/v1/search`) | ✅ Initial support |
 | Speech (`/v1/audio/speech`) | 🔜 Planned |
 | Transcription (`/v1/audio/transcriptions`) | 🔜 Planned |
 | Video generation (`/v1/videos/generations`) | 🔜 Planned |

@@ -1,7 +1,7 @@
 {
   "id": "omniroute",
   "name": "OmniRoute",
-  "description": "OmniRoute multi-provider model router as a first-class OpenClaw text inference, embedding, and image generation provider. 40+ models, 7 providers, automatic fallback, live model discovery.",
+  "description": "OmniRoute multi-provider model router as a first-class OpenClaw text inference, embedding, image generation, and web search provider. 40+ models, 7 providers, automatic fallback, live model discovery.",
   "tags": [
     "omniroute",
     "model-routing",
@@ -9,7 +9,8 @@
     "openai-compatible",
     "inference",
     "embeddings",
-    "image-generation"
+    "image-generation",
+    "web-search"
   ],
   "activation": {
     "onStartup": false
