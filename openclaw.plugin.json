@@ -18,7 +18,8 @@
   "providers": ["omniroute"],
   "contracts": {
     "embeddingProviders": ["omniroute"],
-    "imageGenerationProviders": ["omniroute"]
+    "imageGenerationProviders": ["omniroute"],
+    "webSearchProviders": ["omniroute"]
   },
   "providerRequest": {
     "providers": {
@@ -83,7 +84,7 @@
       }
     },
     "discovery": {
-      "omniroute": "static"
+      "omniroute": "runtime"
     }
   },
   "configSchema": {

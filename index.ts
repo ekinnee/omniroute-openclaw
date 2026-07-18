@@ -18,6 +18,7 @@ import {
 import { omniRouteEmbeddingProviderAdapter } from "./embedding-provider.js";
 import { buildOmniRouteImageGenerationProvider } from "./image-generation-provider.js";
 import { buildLiveOmniRouteProvider, buildOmniRouteProvider } from "./provider-catalog.js";
+import { createOmniRouteWebSearchProvider } from "./web-search-provider.js";
 
 const plugin: OpenClawPluginDefinition = defineSingleProviderPluginEntry({
   id: OMNIROUTE_PROVIDER_ID,
@@ -84,6 +85,7 @@ const plugin: OpenClawPluginDefinition = defineSingleProviderPluginEntry({
   register: (api) => {
     api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);
     api.registerImageGenerationProvider(buildOmniRouteImageGenerationProvider());
+    api.registerWebSearchProvider(createOmniRouteWebSearchProvider());
   },
 });
 

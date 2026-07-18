@@ -7,6 +7,7 @@ import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAUL
 import { omniRouteEmbeddingProviderAdapter } from "./embedding-provider.js";
 import { buildOmniRouteImageGenerationProvider } from "./image-generation-provider.js";
 import { buildLiveOmniRouteProvider, buildOmniRouteProvider } from "./provider-catalog.js";
+import { createOmniRouteWebSearchProvider } from "./web-search-provider.js";
 const plugin = defineSingleProviderPluginEntry({
     id: OMNIROUTE_PROVIDER_ID,
     name: "OmniRoute Provider",
@@ -69,6 +70,7 @@ const plugin = defineSingleProviderPluginEntry({
     register: (api) => {
         api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);
         api.registerImageGenerationProvider(buildOmniRouteImageGenerationProvider());
+        api.registerWebSearchProvider(createOmniRouteWebSearchProvider());
     },
 });
 export default plugin;

@@ -584,12 +584,14 @@ describe("omniroute provider plugin", () => {
     const registerModelCatalogProvider = vi.fn();
     const registerEmbeddingProvider = vi.fn();
     const registerImageGenerationProvider = vi.fn();
+    const registerWebSearchProvider = vi.fn();
 
     plugin.default.register({
       registerProvider,
       registerModelCatalogProvider,
       registerEmbeddingProvider,
       registerImageGenerationProvider,
+      registerWebSearchProvider,
     } as never);
 
     expect(registerProvider).toHaveBeenCalledWith(

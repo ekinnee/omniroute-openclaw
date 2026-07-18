@@ -14,7 +14,7 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Live chat model discovery: `GET /v1/models`
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 - Image generation provider: `omniroute`, backed by `POST /v1/images/generations`
-- Latest released plugin version: `0.1.4`
+- Latest released plugin version: `0.1.5`
 - Next planned capability: web search through `GET/POST /v1/search`
 
 The text provider uses OmniRoute's live model catalog when available and filters the response to chat-capable rows. Successful live discovery treats `GET /v1/models` as the source of truth; `auto` is only added by the static fallback path when live discovery fails. Embeddings and image generation require explicit models from OmniRoute's model catalog and never synthesize `auto`.
