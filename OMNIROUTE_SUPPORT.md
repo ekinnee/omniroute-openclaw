@@ -23,32 +23,44 @@ The text provider uses OmniRoute's live model catalog when available and filters
 
 | OmniRoute endpoint | OpenClaw capability | Status |
 | --- | --- | --- |
-| `GET /v1/models` | Live chat model/combo catalog | Initial support |
-| `POST /v1/chat/completions` | OpenAI-compatible chat provider | Initial support |
-| `POST /v1/responses` | Text provider stream/transport support | Planned after chat catalog |
-| `POST /v1/embeddings` | Embedding provider | Initial support |
-| `POST /v1/images/generations` | Image generation provider | Initial support |
-| `POST /v1/images/edits` | Image generation/edit provider | Planned if OpenClaw edit requests map cleanly |
-| `POST /v1/audio/speech` | Speech provider | Planned |
-| `POST /v1/audio/transcriptions` | Realtime transcription or future batch STT provider | Investigate |
-| `POST /v1/rerank` | No obvious public registration point yet | Track upstream OpenClaw |
-| `POST /v1/moderations` | No obvious public registration point yet | Track upstream OpenClaw |
-| `GET/POST /v1/search` | Web search provider | Next planned |
-| `POST /v1/videos/generations` | Video generation provider | Planned |
-| `POST /v1/music/generations` | Music generation provider | Planned |
-| `/v1/files`, `/v1/batches` | File and batch APIs | Track upstream OpenClaw |
+| `GET /v1/models` | Live chat model/combo catalog | ✅ Initial support |
+| `POST /v1/chat/completions` | OpenAI-compatible chat provider | ✅ Initial support |
+| `POST /v1/embeddings` | Embedding provider | ✅ Initial support |
+| `POST /v1/images/generations` | Image generation provider | ✅ Initial support |
+| `POST /v1/images/edits` | Image generation/edit provider | 🔜 Planned (part of ImageGenerationProvider edit capability) |
+| `GET/POST /v1/search` | Web search provider (`registerWebSearchProvider`) | 🔜 Next planned |
+| `POST /v1/audio/speech` | Speech provider (`registerSpeechProvider`) | 🔜 Planned |
+| `POST /v1/audio/transcriptions` | Realtime transcription provider (`registerRealtimeTranscriptionProvider`) | 🔜 Planned |
+| `POST /v1/videos/generations` | Video generation provider (`registerVideoGenerationProvider`) | 🔜 Planned |
+| `POST /v1/music/generations` | Music generation provider (`registerMusicGenerationProvider`) | 🔜 Planned |
+| `POST /v1/responses` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
+| `POST /v1/completions` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
+| `POST /v1/messages` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
+| `POST /v1/rerank` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
+| `POST /v1/moderations` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
+| `/v1/files`, `/v1/batches` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
 | `/v1/providers/{provider}/...` | Provider-specific routing | Consider after live catalog |
 
 ## Implementation Order
 
+### Plugin-side (OpenClaw SDK surface exists)
+
 1. Keep live catalog handling aligned with OmniRoute's `GET /v1/models` response: preserve ids exactly, include untyped chat/combo/provider rows, honor `supported_endpoints`, and avoid synthesizing live-only models.
 2. Keep embedding model handling explicit: filter `GET /v1/models` to embedding-capable rows, preserve ids exactly, include dimensionality in runtime/cache identity when OpenClaw provides it, and fail clearly when no embedding model is configured.
 3. Keep image generation explicit and generation-only for the first cut: filter `GET /v1/models` to image-capable rows, preserve ids exactly, pass size/count through to `/v1/images/generations`, and reject reference images until edits are implemented.
-4. Add web search support next: map OpenClaw's web-search provider contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
-5. Add `registerModelCatalogProvider` rows for richer media-generation picker/help surfaces. Keep endpoint calls and OmniRoute response projection inside this plugin.
-6. Add capability-specific registrations for speech, video generation, and music generation using exported OpenClaw SDK helpers.
-7. Consider dynamic model resolution only if OpenClaw needs it for catalog-listed OmniRoute rows that cannot be represented through live discovery.
-8. Track endpoints without clear OpenClaw plugin capability surfaces rather than creating custom ad hoc transports.
+4. Add web search support: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
+5. Add image edits: extend the existing `ImageGenerationProvider` to support the `edit` capability, mapping to OmniRoute's `/v1/images/edits`.
+6. Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.
+7. Add transcription (STT): register via `registerRealtimeTranscriptionProvider`, mapping to OmniRoute's `POST /v1/audio/transcriptions`.
+8. Add video generation: register via `registerVideoGenerationProvider`, mapping to OmniRoute's `POST /v1/videos/generations`.
+9. Add music generation: register via `registerMusicGenerationProvider`, mapping to OmniRoute's `POST /v1/music/generations`.
+
+### Upstream OpenClaw PRs needed (no plugin surface yet)
+
+10. Propose `registerRerankProvider` SDK surface for `/v1/rerank`.
+11. Propose `registerModerationProvider` SDK surface for `/v1/moderations`.
+12. Propose file/batch provider surfaces for `/v1/files` and `/v1/batches`.
+13. Propose Responses API, completions, and messages provider surfaces for `/v1/responses`, `/v1/completions`, `/v1/messages`.
 
 ## Compatibility Notes
 

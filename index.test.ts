@@ -142,6 +142,26 @@ describe("omniroute provider plugin", () => {
     expect(catalog.models![0].id).toBe("auto");
   });
 
+  it("forwards AbortSignal to fetch for chat model discovery", async () => {
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ id: "if/kimi-k2", type: "chat" }] }),
+    } as never);
+    const controller = new AbortController();
+
+    await fetchOmniRouteChatModels({
+      baseUrl: "http://localhost:20128/v1",
+      apiKey: "secret-key",
+      signal: controller.signal,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:20128/v1/models",
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+
   it("maps live OmniRoute chat models and filters non-chat models", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
@@ -292,6 +312,26 @@ describe("omniroute provider plugin", () => {
     expect(models.map((model) => model.id)).toEqual(["if/kimi-k2"]);
   });
 
+  it("forwards AbortSignal to fetch for embedding model discovery", async () => {
+    const { fetchOmniRouteEmbeddingModels } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [] }),
+    } as never);
+    const controller = new AbortController();
+
+    await fetchOmniRouteEmbeddingModels({
+      baseUrl: "http://localhost:20128/v1",
+      apiKey: "secret-key",
+      signal: controller.signal,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:20128/v1/models",
+      expect.objectContaining({ signal: controller.signal }),
+    );
+  });
+
   it("maps live OmniRoute embedding models without defaulting to auto", async () => {
     const { fetchOmniRouteEmbeddingModels } = await import("./provider-catalog.js");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
@@ -362,6 +402,26 @@ describe("omniroute provider plugin", () => {
         name: "combo/search-and-chat",
       },
     ]);
+  });
+
+  it("forwards AbortSignal to fetch for image model discovery", async () => {
+    const { fetchOmniRouteImageModels } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [] }),
+    } as never);
+    const controller = new AbortController();
+
+    await fetchOmniRouteImageModels({
+      baseUrl: "http://localhost:20128/v1",
+      apiKey: "secret-key",
+      signal: controller.signal,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:20128/v1/models",
+      expect.objectContaining({ signal: controller.signal }),
+    );
   });
 
   it("maps live OmniRoute image models without defaulting to auto", async () => {

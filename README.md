@@ -95,17 +95,32 @@ The initial image support is text-to-image only. Image edits and reference image
 
 The plugin currently exposes OmniRoute as an OpenAI-compatible chat provider. The longer-term goal is to cover OmniRoute's full published API surface as OpenClaw plugin capabilities mature.
 
+### Implementable in Plugin (OpenClaw SDK surface exists)
+
 | Capability | Status |
 |---|---|
 | Chat completions (`/v1/chat/completions`) | ✅ Initial support |
 | Live model catalog (`GET /v1/models`) | ✅ Initial support |
 | Embeddings (`/v1/embeddings`) | ✅ Initial support |
 | Image generation (`/v1/images/generations`) | ✅ Initial support |
-| Speech (`/v1/audio/speech`) | 🔜 Planned |
-| Transcription (`/v1/audio/transcriptions`) | 🔍 Investigating |
+| Image edits (`/v1/images/edits`) | 🔜 Planned (part of ImageGenerationProvider) |
 | Web search (`/v1/search`) | 🔜 Next planned |
-| Video / music generation | 🔜 Planned |
-| Files, batches, rerank, moderation | ⏳ Tracking upstream |
+| Speech (`/v1/audio/speech`) | 🔜 Planned |
+| Transcription (`/v1/audio/transcriptions`) | 🔜 Planned |
+| Video generation (`/v1/videos/generations`) | 🔜 Planned |
+| Music generation (`/v1/music/generations`) | 🔜 Planned |
+
+### Needs OpenClaw SDK PR (no plugin surface yet)
+
+| OmniRoute Endpoint | Notes |
+|---|---|
+| `/v1/responses` | OpenAI Responses API — no OpenClaw provider surface |
+| `/v1/completions` | Legacy completions — no OpenClaw provider surface |
+| `/v1/messages` | Anthropic-compatible — no OpenClaw provider surface |
+| `/v1/rerank` | Cohere-compatible rerank — no OpenClaw provider surface |
+| `/v1/moderations` | OpenAI-compatible moderation — no OpenClaw provider surface |
+| `/v1/batches` | Batch processing — no OpenClaw provider surface |
+| `/v1/files` | File uploads — no OpenClaw provider surface |
 
 ## Development
 
