@@ -5,6 +5,7 @@ import { buildProviderReplayFamilyHooks } from "openclaw/plugin-sdk/provider-mod
 import { buildProviderToolCompatFamilyHooks } from "openclaw/plugin-sdk/provider-tools";
 import { applyOmniRouteConfig } from "./onboard.js";
 import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_MODEL_REF, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
+import { omniRouteEmbeddingProviderAdapter } from "./embedding-provider.js";
 import { buildLiveOmniRouteProvider, buildOmniRouteProvider } from "./provider-catalog.js";
 export default defineSingleProviderPluginEntry({
     id: OMNIROUTE_PROVIDER_ID,
@@ -64,6 +65,9 @@ export default defineSingleProviderPluginEntry({
         }),
         ...buildProviderToolCompatFamilyHooks("openai"),
         isModernModelRef: () => true,
+    },
+    register: (api) => {
+        api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);
     },
 });
 //# sourceMappingURL=index.js.map

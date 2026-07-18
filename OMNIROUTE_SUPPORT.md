@@ -12,8 +12,9 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Text model API: `openai-completions`
 - Default model: `omniroute/auto`
 - Live chat model discovery: `GET /v1/models`
+- Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 
-The text provider uses OmniRoute's live model catalog when available, filters the response to chat/text-like rows, and keeps `auto` as the static fallback. Non-chat endpoints are still future work.
+The text provider uses OmniRoute's live model catalog when available and filters the response to chat-capable rows. Successful live discovery treats `GET /v1/models` as the source of truth; `auto` is only added by the static fallback path when live discovery fails. Embeddings require an explicit embedding model from OmniRoute's model catalog and never synthesize `auto`.
 
 ## Target Capability Map
 
@@ -22,7 +23,7 @@ The text provider uses OmniRoute's live model catalog when available, filters th
 | `GET /v1/models` | Live chat model/combo catalog | Initial support |
 | `POST /v1/chat/completions` | OpenAI-compatible chat provider | Initial support |
 | `POST /v1/responses` | Text provider stream/transport support | Planned after chat catalog |
-| `POST /v1/embeddings` | Embedding provider | Planned |
+| `POST /v1/embeddings` | Embedding provider | Initial support |
 | `POST /v1/images/generations` | Image generation provider | Planned |
 | `POST /v1/images/edits` | Image generation/edit provider | Planned if OpenClaw edit requests map cleanly |
 | `POST /v1/audio/speech` | Speech provider | Planned |
@@ -37,17 +38,19 @@ The text provider uses OmniRoute's live model catalog when available, filters th
 
 ## Implementation Order
 
-1. Add `resolveDynamicModel` so manually configured OmniRoute model ids work before or beyond live catalog discovery.
-2. Add `registerModelCatalogProvider` rows for text and media-generation picker/help surfaces. Keep endpoint calls and OmniRoute response projection inside this plugin.
-3. Preserve OmniRoute model ids exactly as returned by the gateway, including provider-prefixed ids and combos, and expose them under OpenClaw model refs like `omniroute/<model-id>`.
-4. Add capability-specific registrations for embeddings, image generation, speech, video generation, music generation, and search using exported OpenClaw SDK helpers.
-5. Track endpoints without clear OpenClaw plugin capability surfaces rather than creating custom ad hoc transports.
+1. Keep live catalog handling aligned with OmniRoute's `GET /v1/models` response: preserve ids exactly, include untyped chat/combo/provider rows, honor `supported_endpoints`, and avoid synthesizing live-only models.
+2. Keep embedding model handling explicit: filter `GET /v1/models` to embedding-capable rows, preserve ids exactly, include dimensionality in runtime/cache identity when OpenClaw provides it, and fail clearly when no embedding model is configured.
+3. Add `registerModelCatalogProvider` rows for media-generation picker/help surfaces. Keep endpoint calls and OmniRoute response projection inside this plugin.
+4. Add capability-specific registrations for image generation, speech, video generation, music generation, and search using exported OpenClaw SDK helpers.
+5. Consider dynamic model resolution only if OpenClaw needs it for catalog-listed OmniRoute rows that cannot be represented through live discovery.
+6. Track endpoints without clear OpenClaw plugin capability surfaces rather than creating custom ad hoc transports.
 
 ## Compatibility Notes
 
 - OmniRoute accepts standard bearer API keys and also URL token compatibility modes, but this plugin should prefer bearer auth through OpenClaw's provider credential handling.
-- OmniRoute documents `auto` as a smart-routing model. It should remain the default even after live model discovery.
-- OmniRoute's `/v1/models` includes chat, embedding, image models, and combos. The current text provider filters to chat/text-like rows; future capability providers must filter the same source by their own endpoint capability.
+- OmniRoute documents `auto` as a smart-routing model. It remains the static setup fallback and the default model ref, but a successful live catalog should show it only when OmniRoute advertises it.
+- Embeddings deliberately do not default to `auto`. The selected model and requested dimensionality are part of vector index identity; routing an embedding request to a model with different dimensions can invalidate existing indexes or fail at query time.
+- OmniRoute's `/v1/models` includes chat, embedding, image, rerank, audio, moderation, video, music, and combo rows. The current text provider filters that source to chat-capable rows, and the embedding provider filters it to embedding-capable rows; future capability providers must filter the same source by their own endpoint capability.
 - Base URL overrides should continue to work for local, remote, Docker, and cloud-hosted OmniRoute instances.
 - Live discovery should be auth-gated and cached. Static catalog paths must remain network-free so setup, documentation, tests, and offline picker surfaces work without a running OmniRoute server.
-- The current `defineSingleProviderPluginEntry` helper is appropriate for the initial text-only plugin. Full OmniRoute endpoint support will probably need `definePluginEntry` so the plugin can register several capability providers in one entry.
+- The current `defineSingleProviderPluginEntry` helper remains appropriate while companion capability providers can register through its `register` hook. Full OmniRoute endpoint support may still need `definePluginEntry` when a future capability requires custom registration flow.

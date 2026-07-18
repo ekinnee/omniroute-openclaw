@@ -6,7 +6,6 @@ import {
   OMNIROUTE_BASE_URL_ENV_VAR,
   buildOmniRouteDefaultModel,
   OMNIROUTE_DEFAULT_BASE_URL,
-  OMNIROUTE_DEFAULT_MODEL_ID,
 } from "./models.js";
 
 export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL): ModelProviderConfig {
@@ -26,15 +25,40 @@ type OmniRouteModelEntry = {
   name?: unknown;
   root?: unknown;
   type?: unknown;
+  supported_endpoints?: unknown;
+  output_modalities?: unknown;
   context_length?: unknown;
+  max_input_tokens?: unknown;
   contextWindow?: unknown;
   max_output_tokens?: unknown;
   maxOutputTokens?: unknown;
+  dimensions?: unknown;
+  embedding_dimensions?: unknown;
+  output_dimensions?: unknown;
   input_modalities?: unknown;
   capabilities?: unknown;
 };
 
 const CHAT_MODEL_TYPES = new Set(["chat", "text", "llm", "language"]);
+const EMBEDDING_MODEL_TYPES = new Set(["embedding", "embeddings"]);
+const NON_CHAT_MODEL_TYPES = new Set([
+  "embedding",
+  "image",
+  "rerank",
+  "audio",
+  "moderation",
+  "video",
+  "music",
+]);
+const CHAT_ENDPOINTS = new Set(["chat", "chat-completions", "chat_completions"]);
+const EMBEDDING_ENDPOINTS = new Set(["embedding", "embeddings"]);
+
+export type OmniRouteEmbeddingModel = {
+  id: string;
+  name: string;
+  maxInputTokens?: number;
+  dimensions?: number;
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -74,20 +98,56 @@ function hasCapability(entry: OmniRouteModelEntry, key: string): boolean {
   return entry.capabilities[key] === true;
 }
 
+function normalizeStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim().toLowerCase())
+    .filter(Boolean);
+}
+
 function normalizeInputModalities(entry: OmniRouteModelEntry): Array<"text" | "image"> {
-  const input = Array.isArray(entry.input_modalities) ? entry.input_modalities : [];
+  const input = normalizeStringArray(entry.input_modalities);
   const hasImageInput =
-    input.some((value) => typeof value === "string" && value.toLowerCase() === "image") ||
+    input.includes("image") ||
     hasCapability(entry, "vision") ||
     hasCapability(entry, "attachment");
   return hasImageInput ? ["text", "image"] : ["text"];
 }
 
 function isChatModelEntry(entry: OmniRouteModelEntry): boolean {
-  if (typeof entry.type !== "string" || entry.type.length === 0) {
+  const outputModalities = normalizeStringArray(entry.output_modalities);
+  if (outputModalities.length > 0 && !outputModalities.includes("text")) {
+    return false;
+  }
+
+  const endpoints = normalizeStringArray(entry.supported_endpoints);
+  if (endpoints.length > 0) {
+    return endpoints.some((endpoint) => CHAT_ENDPOINTS.has(endpoint));
+  }
+
+  if (typeof entry.type !== "string" || entry.type.trim().length === 0) {
     return true;
   }
-  return CHAT_MODEL_TYPES.has(entry.type.toLowerCase());
+  const type = entry.type.trim().toLowerCase();
+  if (NON_CHAT_MODEL_TYPES.has(type)) {
+    return false;
+  }
+  return CHAT_MODEL_TYPES.has(type);
+}
+
+function isEmbeddingModelEntry(entry: OmniRouteModelEntry): boolean {
+  const endpoints = normalizeStringArray(entry.supported_endpoints);
+  if (endpoints.length > 0) {
+    return endpoints.some((endpoint) => EMBEDDING_ENDPOINTS.has(endpoint));
+  }
+
+  if (typeof entry.type !== "string" || entry.type.trim().length === 0) {
+    return false;
+  }
+  return EMBEDDING_MODEL_TYPES.has(entry.type.trim().toLowerCase());
 }
 
 export function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry) {
@@ -105,7 +165,9 @@ export function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry) 
     reasoning: hasCapability(entry, "reasoning") || hasCapability(entry, "thinking") || id.startsWith("auto"),
     input: normalizeInputModalities(entry),
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: readPositiveNumber(entry.context_length, entry.contextWindow) ?? 128_000,
+    contextWindow:
+      readPositiveNumber(entry.context_length, entry.max_input_tokens, entry.contextWindow) ??
+      128_000,
     maxTokens: readPositiveNumber(entry.max_output_tokens, entry.maxOutputTokens) ?? 16_384,
     compat: {
       supportsUsageInStreaming: true,
@@ -114,11 +176,34 @@ export function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry) 
   };
 }
 
-function ensureDefaultModel(models: ModelProviderConfig["models"]): ModelProviderConfig["models"] {
-  if (models.some((model) => model.id === OMNIROUTE_DEFAULT_MODEL_ID)) {
-    return models;
+export function buildOmniRouteEmbeddingModelFromCatalogEntry(
+  entry: OmniRouteModelEntry,
+): OmniRouteEmbeddingModel | null {
+  const id = typeof entry.id === "string" ? entry.id.trim() : "";
+  if (!id || !isEmbeddingModelEntry(entry)) {
+    return null;
   }
-  return [buildOmniRouteDefaultModel(), ...models];
+
+  const maxInputTokens = readPositiveNumber(
+    entry.max_input_tokens,
+    entry.context_length,
+    entry.contextWindow,
+  );
+  const dimensions = readPositiveNumber(
+    entry.dimensions,
+    entry.embedding_dimensions,
+    entry.output_dimensions,
+  );
+
+  return {
+    id,
+    name:
+      (typeof entry.name === "string" && entry.name.trim()) ||
+      (typeof entry.root === "string" && entry.root.trim()) ||
+      id,
+    ...(maxInputTokens ? { maxInputTokens } : {}),
+    ...(dimensions ? { dimensions } : {}),
+  };
 }
 
 export async function fetchOmniRouteChatModels(params: {
@@ -161,7 +246,50 @@ export async function fetchOmniRouteChatModels(params: {
     models.push(model);
   }
 
-  return ensureDefaultModel(models);
+  return models;
+}
+
+export async function fetchOmniRouteEmbeddingModels(params: {
+  baseUrl: string;
+  apiKey?: string;
+  signal?: AbortSignal;
+}): Promise<OmniRouteEmbeddingModel[]> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (params.apiKey) {
+    headers.Authorization = `Bearer ${params.apiKey}`;
+  }
+
+  const response = await fetch(`${normalizeBaseUrl(params.baseUrl)}/models`, {
+    headers,
+    signal: params.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`OmniRoute embedding model catalog request failed with HTTP ${response.status}`);
+  }
+
+  const payload = (await response.json()) as OmniRouteModelListResponse;
+  if (!Array.isArray(payload.data)) {
+    throw new Error("OmniRoute model catalog response did not include a data array");
+  }
+
+  const seen = new Set<string>();
+  const models: OmniRouteEmbeddingModel[] = [];
+  for (const rawEntry of payload.data) {
+    if (!isRecord(rawEntry)) {
+      continue;
+    }
+    const model = buildOmniRouteEmbeddingModelFromCatalogEntry(rawEntry);
+    if (!model || seen.has(model.id)) {
+      continue;
+    }
+    seen.add(model.id);
+    models.push(model);
+  }
+
+  return models;
 }
 
 export async function buildLiveOmniRouteProvider(

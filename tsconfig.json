@@ -12,5 +12,5 @@
     "declarationMap": false,
     "sourceMap": true
   },
-  "include": ["index.ts", "models.ts", "onboard.ts", "provider-catalog.ts"]
+  "include": ["index.ts", "models.ts", "onboard.ts", "provider-catalog.ts", "embedding-provider.ts"]
 }

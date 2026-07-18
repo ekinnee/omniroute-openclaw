@@ -1,6 +1,6 @@
 # OmniRoute Provider Plugin for OpenClaw
 
-Registers [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — a multi-provider model routing proxy — as a first-class text inference provider in OpenClaw. Routes through **40+ models across 7 providers** with automatic fallback, live model discovery, and OpenAI-compatible transport.
+Registers [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — a multi-provider model routing proxy — as a first-class text inference and embedding provider in OpenClaw. Routes through **40+ models across 7 providers** with automatic fallback, live model discovery, and OpenAI-compatible transport.
 
 ## Quick Start
 
@@ -15,7 +15,7 @@ export OMNIROUTE_API_KEY="your-key-here"
 openclaw models list | grep omniroute
 ```
 
-OmniRoute appears as a model provider immediately. Select `omniroute/auto` to let OmniRoute handle downstream routing, or pick any chat model discovered from OmniRoute's live catalog.
+OmniRoute appears as a model provider immediately. Select `omniroute/auto` when OmniRoute advertises it, or pick any chat-capable model discovered from OmniRoute's live catalog.
 
 ## Configuration
 
@@ -44,11 +44,32 @@ Override the base URL in your OpenClaw config:
 
 This is useful for Docker, remote, or cloud-hosted OmniRoute instances.
 
+### Embeddings
+
+OmniRoute can also serve OpenClaw embedding requests through `POST /v1/embeddings`.
+Configure an explicit embedding model from OmniRoute's `GET /v1/models` response:
+
+```json5
+{
+  agents: {
+    default: {
+      memorySearch: {
+        provider: "omniroute",
+        model: "provider/embedding-model-from-omniroute",
+      },
+    },
+  },
+}
+```
+
+The plugin does not default embeddings to `auto`. Embedding model and dimensionality are part of the vector index identity, so changing either can invalidate an existing index or make queries fail.
+
 ## How It Works
 
-1. **Live model discovery** — On startup, the plugin fetches `GET /v1/models` from your OmniRoute gateway and registers every chat/text model it finds as `omniroute/<model-id>`.
-2. **Static fallback** — The `omniroute/auto` model is always available, even when OmniRoute is offline or unauthenticated, so your configs don't break during setup.
-3. **OpenAI-compatible transport** — All requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
+1. **Live model discovery** — On startup, the plugin fetches `GET /v1/models` from your OmniRoute gateway and registers chat-capable rows as `omniroute/<model-id>`. Successful live discovery treats OmniRoute's catalog as the source of truth.
+2. **Static fallback** — The `omniroute/auto` model is available when OmniRoute is offline or unauthenticated, so setup can proceed without a running gateway. When live discovery succeeds, `auto` is shown only if OmniRoute returns it.
+3. **OpenAI-compatible transport** — Text requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
+4. **Explicit embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint, but require a configured embedding model instead of falling back to `auto`.
 
 ## Roadmap
 
@@ -58,7 +79,7 @@ The plugin currently exposes OmniRoute as an OpenAI-compatible chat provider. Th
 |---|---|
 | Chat completions (`/v1/chat/completions`) | ✅ Initial support |
 | Live model catalog (`GET /v1/models`) | ✅ Initial support |
-| Embeddings (`/v1/embeddings`) | 🔜 Planned |
+| Embeddings (`/v1/embeddings`) | ✅ Initial support |
 | Image generation (`/v1/images/generations`) | 🔜 Planned |
 | Speech (`/v1/audio/speech`) | 🔜 Planned |
 | Transcription (`/v1/audio/transcriptions`) | 🔍 Investigating |

@@ -6,6 +6,14 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
+const embeddingProviderMocks = vi.hoisted(() => ({
+  getEmbeddingProvider: vi.fn(),
+}));
+
+vi.mock("openclaw/plugin-sdk/embedding-providers", () => ({
+  getEmbeddingProvider: embeddingProviderMocks.getEmbeddingProvider,
+}));
+
 function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string; envBaseUrl?: string }) {
   return {
     config: {
@@ -33,6 +41,7 @@ function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string; env
 describe("omniroute provider plugin", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    embeddingProviderMocks.getEmbeddingProvider.mockReset();
   });
 
   it("has a valid package.json", () => {
@@ -50,6 +59,7 @@ describe("omniroute provider plugin", () => {
     );
     expect(manifest.id).toBe("omniroute");
     expect(manifest.providers).toContain("omniroute");
+    expect(manifest.contracts.embeddingProviders).toEqual(["omniroute"]);
     expect(manifest.modelCatalog.providers.omniroute).toBeDefined();
     expect(manifest.modelCatalog.providers.omniroute.api).toBe("openai-completions");
   });
@@ -82,6 +92,15 @@ describe("omniroute provider plugin", () => {
       ok: true,
       json: async () => ({
         data: [
+          {
+            id: "auto",
+            object: "model",
+            owned_by: "combo",
+            root: "auto",
+            context_length: 128_000,
+            max_output_tokens: 16_384,
+            capabilities: { tool_calling: true, reasoning: true, thinking: true },
+          },
           {
             id: "if/kimi-k2",
             object: "model",
@@ -128,6 +147,165 @@ describe("omniroute provider plugin", () => {
         supportsTools: true,
       },
     });
+  });
+
+  it("uses OmniRoute supported_endpoints as the live chat catalog source of truth", async () => {
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "auto/best-coding",
+            object: "model",
+            owned_by: "combo",
+            root: "auto/best-coding",
+            max_input_tokens: 200_000,
+          },
+          {
+            id: "openrouter/google/gemini-pro",
+            object: "model",
+            owned_by: "openrouter",
+            root: "google/gemini-pro",
+            supported_endpoints: ["chat", "images"],
+            type: "image",
+            output_modalities: ["text", "image"],
+            capabilities: { vision: true },
+          },
+          {
+            id: "hf/diffusion-model",
+            object: "model",
+            owned_by: "huggingface",
+            supported_endpoints: ["images"],
+            type: "image",
+            output_modalities: ["image"],
+          },
+          {
+            id: "nebius/Qwen/Qwen3-Embedding-8B",
+            object: "model",
+            owned_by: "nebius",
+            supported_endpoints: ["embeddings"],
+          },
+          {
+            id: "audio/speech-only",
+            object: "model",
+            type: "audio",
+          },
+        ],
+      }),
+    } as never);
+
+    const models = await fetchOmniRouteChatModels({
+      baseUrl: "http://localhost:20128/v1",
+    });
+
+    expect(models.map((model) => model.id)).toEqual([
+      "auto/best-coding",
+      "openrouter/google/gemini-pro",
+    ]);
+    expect(models[0]).toMatchObject({
+      id: "auto/best-coding",
+      contextWindow: 200_000,
+      reasoning: true,
+    });
+    expect(models[1]).toMatchObject({
+      id: "openrouter/google/gemini-pro",
+      input: ["text", "image"],
+    });
+  });
+
+  it("does not synthesize auto when live OmniRoute discovery succeeds without it", async () => {
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "if/kimi-k2",
+            object: "model",
+            owned_by: "inference.net",
+          },
+        ],
+      }),
+    } as never);
+
+    const models = await fetchOmniRouteChatModels({
+      baseUrl: "http://localhost:20128/v1",
+    });
+
+    expect(models.map((model) => model.id)).toEqual(["if/kimi-k2"]);
+  });
+
+  it("maps live OmniRoute embedding models without defaulting to auto", async () => {
+    const { fetchOmniRouteEmbeddingModels } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "auto",
+            object: "model",
+            owned_by: "combo",
+          },
+          {
+            id: "nebius/Qwen/Qwen3-Embedding-8B",
+            name: "Qwen3 Embedding 8B",
+            supported_endpoints: ["embeddings"],
+            max_input_tokens: 32_768,
+            dimensions: 4096,
+          },
+          {
+            id: "openai/text-embedding-3-small",
+            type: "embedding",
+            embedding_dimensions: 1536,
+          },
+          {
+            id: "combo/search-and-chat",
+            type: "chat",
+            supported_endpoints: ["chat", "embeddings"],
+          },
+          {
+            id: "openai/dall-e-3",
+            type: "image",
+            supported_endpoints: ["images"],
+          },
+          {
+            id: "nebius/Qwen/Qwen3-Embedding-8B",
+            type: "embedding",
+          },
+        ],
+      }),
+    } as never);
+
+    const models = await fetchOmniRouteEmbeddingModels({
+      baseUrl: "http://localhost:20128/v1/",
+      apiKey: "secret-key",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:20128/v1/models", {
+      headers: {
+        Accept: "application/json",
+        Authorization: expect.stringMatching(/^Bearer /),
+      },
+      signal: undefined,
+    });
+    expect(models).toEqual([
+      {
+        id: "nebius/Qwen/Qwen3-Embedding-8B",
+        name: "Qwen3 Embedding 8B",
+        maxInputTokens: 32_768,
+        dimensions: 4096,
+      },
+      {
+        id: "openai/text-embedding-3-small",
+        name: "openai/text-embedding-3-small",
+        dimensions: 1536,
+      },
+      {
+        id: "combo/search-and-chat",
+        name: "combo/search-and-chat",
+      },
+    ]);
   });
 
   it("falls back to the static auto model when live discovery fails", async () => {
@@ -213,5 +391,153 @@ describe("omniroute provider plugin", () => {
     expect(plugin.default).toBeDefined();
     expect(plugin.default.id).toBe("omniroute");
     expect(typeof plugin.default.register).toBe("function");
+  });
+
+  it("registers the OmniRoute embedding provider", async () => {
+    const plugin = await import("./index.js");
+    const registerProvider = vi.fn();
+    const registerModelCatalogProvider = vi.fn();
+    const registerEmbeddingProvider = vi.fn();
+
+    plugin.default.register({
+      registerProvider,
+      registerModelCatalogProvider,
+      registerEmbeddingProvider,
+    } as never);
+
+    expect(registerProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "omniroute",
+        label: "OmniRoute",
+      }),
+    );
+    expect(registerModelCatalogProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "omniroute",
+        kinds: ["text"],
+      }),
+    );
+    expect(registerEmbeddingProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "omniroute",
+        transport: "remote",
+        authProviderId: "omniroute",
+      }),
+    );
+  });
+
+  it("delegates OmniRoute embedding requests through the OpenAI-compatible adapter", async () => {
+    const create = vi.fn(async (options) => ({
+      provider: {
+        id: "openai-compatible",
+        model: options.model,
+        dimensions: options.dimensions,
+        embed: vi.fn(async () => [0.1, 0.2]),
+        embedBatch: vi.fn(async () => [[0.1, 0.2]]),
+      },
+      runtime: {
+        id: "openai-compatible",
+        cacheKeyData: {
+          provider: options.provider,
+          model: options.model,
+          dimensions: options.dimensions,
+        },
+      },
+    }));
+    embeddingProviderMocks.getEmbeddingProvider.mockReturnValue({
+      id: "openai-compatible",
+      create,
+    });
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const config = {
+      models: {
+        providers: {
+          omniroute: {
+            api: "openai-completions",
+            baseUrl: "http://localhost:20128/v1",
+          },
+        },
+      },
+    };
+
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: config as never,
+      provider: "other",
+      model: "  nebius/Qwen/Qwen3-Embedding-8B  ",
+      dimensions: 4096,
+    });
+
+    expect(embeddingProviderMocks.getEmbeddingProvider).toHaveBeenCalledWith(
+      "openai-compatible",
+      config,
+    );
+    expect(create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        config,
+        provider: "omniroute",
+        model: "nebius/Qwen/Qwen3-Embedding-8B",
+        dimensions: 4096,
+      }),
+    );
+    expect(result.provider).toMatchObject({
+      id: "omniroute",
+      model: "nebius/Qwen/Qwen3-Embedding-8B",
+      dimensions: 4096,
+    });
+    expect(result.runtime).toMatchObject({
+      id: "omniroute",
+      cacheKeyData: {
+        provider: "omniroute",
+        model: "nebius/Qwen/Qwen3-Embedding-8B",
+        dimensions: 4096,
+      },
+    });
+  });
+
+  it("requires an explicit OmniRoute embedding model", async () => {
+    embeddingProviderMocks.getEmbeddingProvider.mockReturnValue({
+      id: "openai-compatible",
+      create: vi.fn(),
+    });
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+
+    await expect(
+      omniRouteEmbeddingProviderAdapter.create({
+        config: {} as never,
+        model: " ",
+      }),
+    ).rejects.toThrow(/explicit embedding model/);
+  });
+
+  it("builds fallback embedding index identity from model, base URL, and dimensions", async () => {
+    embeddingProviderMocks.getEmbeddingProvider.mockReturnValue({
+      id: "openai-compatible",
+      create: vi.fn(),
+    });
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+
+    expect(
+      omniRouteEmbeddingProviderAdapter.resolveIndexIdentity?.({
+        config: {
+          models: {
+            providers: {
+              omniroute: {
+                baseUrl: "http://localhost:20128/v1/",
+              },
+            },
+          },
+        } as never,
+        model: "openai/text-embedding-3-small",
+        dimensions: 1536,
+      }),
+    ).toEqual({
+      model: "openai/text-embedding-3-small",
+      cacheKeyData: {
+        provider: "omniroute",
+        baseUrl: "http://localhost:20128/v1",
+        model: "openai/text-embedding-3-small",
+        dimensions: 1536,
+      },
+    });
   });
 });

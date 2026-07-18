@@ -14,6 +14,7 @@ import {
   OMNIROUTE_LABEL,
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
+import { omniRouteEmbeddingProviderAdapter } from "./embedding-provider.js";
 import { buildLiveOmniRouteProvider, buildOmniRouteProvider } from "./provider-catalog.js";
 
 export default defineSingleProviderPluginEntry({
@@ -77,5 +78,8 @@ export default defineSingleProviderPluginEntry({
     }),
     ...buildProviderToolCompatFamilyHooks("openai"),
     isModernModelRef: () => true,
+  },
+  register: (api) => {
+    api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);
   },
 });

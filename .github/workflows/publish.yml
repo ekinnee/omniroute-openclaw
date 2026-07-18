@@ -17,7 +17,7 @@ jobs:
       actions: read
       contents: read
       id-token: write
-    uses: openclaw/clawhub/.github/workflows/package-publish.yml@main
+    uses: openclaw/clawhub/.github/workflows/package-publish.yml@v0.12.0
     with:
       source: ekinnee/omniroute-openclaw
       dry_run: false
@@ -30,7 +30,7 @@ jobs:
       actions: read
       contents: read
       id-token: write
-    uses: openclaw/clawhub/.github/workflows/package-publish.yml@main
+    uses: openclaw/clawhub/.github/workflows/package-publish.yml@v0.12.0
     with:
       source: ekinnee/omniroute-openclaw
       dry_run: ${{ inputs.dry_run }}
