@@ -9,6 +9,7 @@ export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL) {
 }
 const CHAT_MODEL_TYPES = new Set(["chat", "text", "llm", "language"]);
 const EMBEDDING_MODEL_TYPES = new Set(["embedding", "embeddings"]);
+const IMAGE_MODEL_TYPES = new Set(["image", "images"]);
 const NON_CHAT_MODEL_TYPES = new Set([
     "embedding",
     "image",
@@ -20,6 +21,7 @@ const NON_CHAT_MODEL_TYPES = new Set([
 ]);
 const CHAT_ENDPOINTS = new Set(["chat", "chat-completions", "chat_completions"]);
 const EMBEDDING_ENDPOINTS = new Set(["embedding", "embeddings"]);
+const IMAGE_ENDPOINTS = new Set(["image", "images", "image-generation", "image_generation"]);
 function isRecord(value) {
     return typeof value === "object" && value !== null;
 }
@@ -61,6 +63,15 @@ function normalizeStringArray(value) {
         .map((item) => item.trim().toLowerCase())
         .filter(Boolean);
 }
+function normalizeTrimmedStringArray(value) {
+    if (!Array.isArray(value)) {
+        return [];
+    }
+    return value
+        .filter((item) => typeof item === "string")
+        .map((item) => item.trim())
+        .filter(Boolean);
+}
 function normalizeInputModalities(entry) {
     const input = normalizeStringArray(entry.input_modalities);
     const hasImageInput = input.includes("image") ||
@@ -95,6 +106,20 @@ function isEmbeddingModelEntry(entry) {
         return false;
     }
     return EMBEDDING_MODEL_TYPES.has(entry.type.trim().toLowerCase());
+}
+function isImageModelEntry(entry) {
+    const outputModalities = normalizeStringArray(entry.output_modalities);
+    if (outputModalities.length > 0 && !outputModalities.includes("image")) {
+        return false;
+    }
+    const endpoints = normalizeStringArray(entry.supported_endpoints);
+    if (endpoints.length > 0) {
+        return endpoints.some((endpoint) => IMAGE_ENDPOINTS.has(endpoint));
+    }
+    if (typeof entry.type !== "string" || entry.type.trim().length === 0) {
+        return false;
+    }
+    return IMAGE_MODEL_TYPES.has(entry.type.trim().toLowerCase());
 }
 export function buildOmniRouteModelFromCatalogEntry(entry) {
     const id = typeof entry.id === "string" ? entry.id.trim() : "";
@@ -132,6 +157,20 @@ export function buildOmniRouteEmbeddingModelFromCatalogEntry(entry) {
             id,
         ...(maxInputTokens ? { maxInputTokens } : {}),
         ...(dimensions ? { dimensions } : {}),
+    };
+}
+export function buildOmniRouteImageModelFromCatalogEntry(entry) {
+    const id = typeof entry.id === "string" ? entry.id.trim() : "";
+    if (!id || !isImageModelEntry(entry)) {
+        return null;
+    }
+    return {
+        id,
+        name: (typeof entry.name === "string" && entry.name.trim()) ||
+            (typeof entry.root === "string" && entry.root.trim()) ||
+            id,
+        supportedSizes: normalizeTrimmedStringArray(entry.supported_sizes),
+        inputModalities: normalizeTrimmedStringArray(entry.input_modalities),
     };
 }
 export async function fetchOmniRouteChatModels(params) {
@@ -192,6 +231,39 @@ export async function fetchOmniRouteEmbeddingModels(params) {
             continue;
         }
         const model = buildOmniRouteEmbeddingModelFromCatalogEntry(rawEntry);
+        if (!model || seen.has(model.id)) {
+            continue;
+        }
+        seen.add(model.id);
+        models.push(model);
+    }
+    return models;
+}
+export async function fetchOmniRouteImageModels(params) {
+    const headers = {
+        Accept: "application/json",
+    };
+    if (params.apiKey) {
+        headers.Authorization = `Bearer ${params.apiKey}`;
+    }
+    const response = await fetch(`${normalizeBaseUrl(params.baseUrl)}/models`, {
+        headers,
+        signal: params.signal,
+    });
+    if (!response.ok) {
+        throw new Error(`OmniRoute image model catalog request failed with HTTP ${response.status}`);
+    }
+    const payload = (await response.json());
+    if (!Array.isArray(payload.data)) {
+        throw new Error("OmniRoute model catalog response did not include a data array");
+    }
+    const seen = new Set();
+    const models = [];
+    for (const rawEntry of payload.data) {
+        if (!isRecord(rawEntry)) {
+            continue;
+        }
+        const model = buildOmniRouteImageModelFromCatalogEntry(rawEntry);
         if (!model || seen.has(model.id)) {
             continue;
         }

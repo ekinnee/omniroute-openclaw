@@ -9,9 +9,35 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const embeddingProviderMocks = vi.hoisted(() => ({
   getEmbeddingProvider: vi.fn(),
 }));
+const providerAuthMocks = vi.hoisted(() => ({
+  isProviderApiKeyConfigured: vi.fn(),
+}));
+const providerAuthRuntimeMocks = vi.hoisted(() => ({
+  resolveApiKeyForProvider: vi.fn(),
+}));
+const providerHttpMocks = vi.hoisted(() => ({
+  assertOkOrThrowHttpError: vi.fn(),
+  postJsonRequest: vi.fn(),
+  readProviderJsonResponse: vi.fn(),
+  resolveProviderHttpRequestConfig: vi.fn(),
+  sanitizeConfiguredModelProviderRequest: vi.fn((value) => value),
+}));
 
 vi.mock("openclaw/plugin-sdk/embedding-providers", () => ({
   getEmbeddingProvider: embeddingProviderMocks.getEmbeddingProvider,
+}));
+vi.mock("openclaw/plugin-sdk/provider-auth", () => ({
+  isProviderApiKeyConfigured: providerAuthMocks.isProviderApiKeyConfigured,
+}));
+vi.mock("openclaw/plugin-sdk/provider-auth-runtime", () => ({
+  resolveApiKeyForProvider: providerAuthRuntimeMocks.resolveApiKeyForProvider,
+}));
+vi.mock("openclaw/plugin-sdk/provider-http", () => ({
+  assertOkOrThrowHttpError: providerHttpMocks.assertOkOrThrowHttpError,
+  postJsonRequest: providerHttpMocks.postJsonRequest,
+  readProviderJsonResponse: providerHttpMocks.readProviderJsonResponse,
+  resolveProviderHttpRequestConfig: providerHttpMocks.resolveProviderHttpRequestConfig,
+  sanitizeConfiguredModelProviderRequest: providerHttpMocks.sanitizeConfiguredModelProviderRequest,
 }));
 
 function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string; envBaseUrl?: string }) {
@@ -42,6 +68,14 @@ describe("omniroute provider plugin", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     embeddingProviderMocks.getEmbeddingProvider.mockReset();
+    providerAuthMocks.isProviderApiKeyConfigured.mockReset();
+    providerAuthRuntimeMocks.resolveApiKeyForProvider.mockReset();
+    providerHttpMocks.assertOkOrThrowHttpError.mockReset();
+    providerHttpMocks.postJsonRequest.mockReset();
+    providerHttpMocks.readProviderJsonResponse.mockReset();
+    providerHttpMocks.resolveProviderHttpRequestConfig.mockReset();
+    providerHttpMocks.sanitizeConfiguredModelProviderRequest.mockReset();
+    providerHttpMocks.sanitizeConfiguredModelProviderRequest.mockImplementation((value) => value);
   });
 
   it("has a valid package.json", () => {
@@ -60,6 +94,7 @@ describe("omniroute provider plugin", () => {
     expect(manifest.id).toBe("omniroute");
     expect(manifest.providers).toContain("omniroute");
     expect(manifest.contracts.embeddingProviders).toEqual(["omniroute"]);
+    expect(manifest.contracts.imageGenerationProviders).toEqual(["omniroute"]);
     expect(manifest.modelCatalog.providers.omniroute).toBeDefined();
     expect(manifest.modelCatalog.providers.omniroute.api).toBe("openai-completions");
   });
@@ -308,6 +343,75 @@ describe("omniroute provider plugin", () => {
     ]);
   });
 
+  it("maps live OmniRoute image models without defaulting to auto", async () => {
+    const { fetchOmniRouteImageModels } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "auto",
+            object: "model",
+            owned_by: "combo",
+          },
+          {
+            id: "openai/gpt-image-2",
+            name: "GPT Image 2",
+            type: "image",
+            supported_sizes: ["1024x1024", "1536x1024"],
+            input_modalities: ["text"],
+            output_modalities: ["image"],
+          },
+          {
+            id: "black-forest-labs/flux-kontext-pro",
+            supported_endpoints: ["images"],
+            input_modalities: ["text", "image"],
+          },
+          {
+            id: "if/kimi-k2",
+            type: "chat",
+          },
+          {
+            id: "weird/text-output",
+            supported_endpoints: ["images"],
+            output_modalities: ["text"],
+          },
+          {
+            id: "openai/gpt-image-2",
+            type: "image",
+          },
+        ],
+      }),
+    } as never);
+
+    const models = await fetchOmniRouteImageModels({
+      baseUrl: "http://localhost:20128/v1/",
+      apiKey: "secret-key",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith("http://localhost:20128/v1/models", {
+      headers: {
+        Accept: "application/json",
+        Authorization: expect.stringMatching(/^Bearer /),
+      },
+      signal: undefined,
+    });
+    expect(models).toEqual([
+      {
+        id: "openai/gpt-image-2",
+        name: "GPT Image 2",
+        supportedSizes: ["1024x1024", "1536x1024"],
+        inputModalities: ["text"],
+      },
+      {
+        id: "black-forest-labs/flux-kontext-pro",
+        name: "black-forest-labs/flux-kontext-pro",
+        supportedSizes: [],
+        inputModalities: ["text", "image"],
+      },
+    ]);
+  });
+
   it("falls back to the static auto model when live discovery fails", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
@@ -398,11 +502,13 @@ describe("omniroute provider plugin", () => {
     const registerProvider = vi.fn();
     const registerModelCatalogProvider = vi.fn();
     const registerEmbeddingProvider = vi.fn();
+    const registerImageGenerationProvider = vi.fn();
 
     plugin.default.register({
       registerProvider,
       registerModelCatalogProvider,
       registerEmbeddingProvider,
+      registerImageGenerationProvider,
     } as never);
 
     expect(registerProvider).toHaveBeenCalledWith(
@@ -424,6 +530,12 @@ describe("omniroute provider plugin", () => {
         authProviderId: "omniroute",
       }),
     );
+    const imageProvider = registerImageGenerationProvider.mock.calls[0]?.[0];
+    expect(imageProvider).toMatchObject({
+      id: "omniroute",
+      label: "OmniRoute",
+    });
+    expect(imageProvider).not.toHaveProperty("defaultModel");
   });
 
   it("delegates OmniRoute embedding requests through the OpenAI-compatible adapter", async () => {
@@ -539,5 +651,158 @@ describe("omniroute provider plugin", () => {
         dimensions: 1536,
       },
     });
+  });
+
+  it("generates OmniRoute images with an explicit model", async () => {
+    providerAuthRuntimeMocks.resolveApiKeyForProvider.mockResolvedValue({ apiKey: "secret-key" });
+    providerHttpMocks.resolveProviderHttpRequestConfig.mockReturnValue({
+      baseUrl: "http://localhost:20128/v1",
+      allowPrivateNetwork: true,
+      headers: new Headers({ Authorization: "Bearer secret-key" }),
+      dispatcherPolicy: undefined,
+    });
+    const release = vi.fn();
+    const response = { ok: true } as never;
+    providerHttpMocks.postJsonRequest.mockResolvedValue({ response, release });
+    providerHttpMocks.readProviderJsonResponse.mockResolvedValue({
+      data: [
+        {
+          b64_json: Buffer.from("generated image").toString("base64"),
+        },
+      ],
+    });
+    const { buildOmniRouteImageGenerationProvider } = await import(
+      "./image-generation-provider.js"
+    );
+    const provider = buildOmniRouteImageGenerationProvider();
+
+    const result = await provider.generateImage({
+      provider: "omniroute",
+      model: "openai/gpt-image-2",
+      prompt: "a schematic city",
+      count: 9,
+      size: "1536x1024",
+      cfg: {
+        models: {
+          providers: {
+            omniroute: {
+              baseUrl: "http://localhost:20128/v1/",
+              request: { allowPrivateNetwork: true },
+            },
+          },
+        },
+      } as never,
+      agentDir: "/tmp/agent",
+    });
+
+    expect(provider.defaultModel).toBeUndefined();
+    expect(provider.capabilities.edit.enabled).toBe(false);
+    expect(providerAuthRuntimeMocks.resolveApiKeyForProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "omniroute",
+        agentDir: "/tmp/agent",
+      }),
+    );
+    expect(providerHttpMocks.sanitizeConfiguredModelProviderRequest).toHaveBeenCalledWith({
+      allowPrivateNetwork: true,
+    });
+    expect(providerHttpMocks.resolveProviderHttpRequestConfig).toHaveBeenCalledWith(
+      expect.objectContaining({
+        baseUrl: "http://localhost:20128/v1",
+        defaultBaseUrl: "http://localhost:20128/v1",
+        defaultHeaders: {
+          Authorization: "Bearer secret-key",
+        },
+        provider: "omniroute",
+        capability: "image",
+        transport: "http",
+      }),
+    );
+    expect(providerHttpMocks.postJsonRequest).toHaveBeenCalledWith(
+      expect.objectContaining({
+        url: "http://localhost:20128/v1/images/generations",
+        body: {
+          model: "openai/gpt-image-2",
+          prompt: "a schematic city",
+          n: 4,
+          size: "1536x1024",
+          response_format: "b64_json",
+        },
+        fetchFn: fetch,
+        allowPrivateNetwork: true,
+      }),
+    );
+    expect(providerHttpMocks.assertOkOrThrowHttpError).toHaveBeenCalledWith(
+      response,
+      "OmniRoute image generation failed",
+    );
+    expect(release).toHaveBeenCalledOnce();
+    expect(result.model).toBe("openai/gpt-image-2");
+    expect(result.images).toHaveLength(1);
+    expect(result.images[0]).toMatchObject({
+      mimeType: "image/png",
+      fileName: "omniroute-image-1.png",
+    });
+  });
+
+  it("requires an explicit OmniRoute image model", async () => {
+    const { buildOmniRouteImageGenerationProvider } = await import(
+      "./image-generation-provider.js"
+    );
+    const provider = buildOmniRouteImageGenerationProvider();
+
+    await expect(
+      provider.generateImage({
+        provider: "omniroute",
+        model: " ",
+        prompt: "test",
+        cfg: {} as never,
+      }),
+    ).rejects.toThrow(/explicit image model/);
+  });
+
+  it("rejects OmniRoute image reference inputs until edits are supported", async () => {
+    const { buildOmniRouteImageGenerationProvider } = await import(
+      "./image-generation-provider.js"
+    );
+    const provider = buildOmniRouteImageGenerationProvider();
+
+    await expect(
+      provider.generateImage({
+        provider: "omniroute",
+        model: "openai/gpt-image-2",
+        prompt: "edit this",
+        inputImages: [{ buffer: Buffer.from("image"), mimeType: "image/png" }],
+        cfg: {} as never,
+      }),
+    ).rejects.toThrow(/reference images are not supported yet/);
+  });
+
+  it("fails clearly on empty OmniRoute image responses", async () => {
+    providerAuthRuntimeMocks.resolveApiKeyForProvider.mockResolvedValue({ apiKey: "secret-key" });
+    providerHttpMocks.resolveProviderHttpRequestConfig.mockReturnValue({
+      baseUrl: "http://localhost:20128/v1",
+      allowPrivateNetwork: undefined,
+      headers: new Headers(),
+      dispatcherPolicy: undefined,
+    });
+    providerHttpMocks.postJsonRequest.mockResolvedValue({
+      response: { ok: true } as never,
+      release: vi.fn(),
+    });
+    providerHttpMocks.readProviderJsonResponse.mockResolvedValue({ data: [] });
+    const { buildOmniRouteImageGenerationProvider } = await import(
+      "./image-generation-provider.js"
+    );
+    const provider = buildOmniRouteImageGenerationProvider();
+
+    await expect(
+      provider.generateImage({
+        provider: "omniroute",
+        model: "openai/gpt-image-2",
+        prompt: "test",
+        cfg: {} as never,
+      }),
+    ).rejects.toThrow(/missing image data/);
   });
 });

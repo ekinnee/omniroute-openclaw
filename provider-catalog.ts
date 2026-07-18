@@ -36,11 +36,13 @@ type OmniRouteModelEntry = {
   embedding_dimensions?: unknown;
   output_dimensions?: unknown;
   input_modalities?: unknown;
+  supported_sizes?: unknown;
   capabilities?: unknown;
 };
 
 const CHAT_MODEL_TYPES = new Set(["chat", "text", "llm", "language"]);
 const EMBEDDING_MODEL_TYPES = new Set(["embedding", "embeddings"]);
+const IMAGE_MODEL_TYPES = new Set(["image", "images"]);
 const NON_CHAT_MODEL_TYPES = new Set([
   "embedding",
   "image",
@@ -52,12 +54,20 @@ const NON_CHAT_MODEL_TYPES = new Set([
 ]);
 const CHAT_ENDPOINTS = new Set(["chat", "chat-completions", "chat_completions"]);
 const EMBEDDING_ENDPOINTS = new Set(["embedding", "embeddings"]);
+const IMAGE_ENDPOINTS = new Set(["image", "images", "image-generation", "image_generation"]);
 
 export type OmniRouteEmbeddingModel = {
   id: string;
   name: string;
   maxInputTokens?: number;
   dimensions?: number;
+};
+
+export type OmniRouteImageModel = {
+  id: string;
+  name: string;
+  supportedSizes: string[];
+  inputModalities: string[];
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -108,6 +118,16 @@ function normalizeStringArray(value: unknown): string[] {
     .filter(Boolean);
 }
 
+function normalizeTrimmedStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value
+    .filter((item): item is string => typeof item === "string")
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
 function normalizeInputModalities(entry: OmniRouteModelEntry): Array<"text" | "image"> {
   const input = normalizeStringArray(entry.input_modalities);
   const hasImageInput =
@@ -148,6 +168,23 @@ function isEmbeddingModelEntry(entry: OmniRouteModelEntry): boolean {
     return false;
   }
   return EMBEDDING_MODEL_TYPES.has(entry.type.trim().toLowerCase());
+}
+
+function isImageModelEntry(entry: OmniRouteModelEntry): boolean {
+  const outputModalities = normalizeStringArray(entry.output_modalities);
+  if (outputModalities.length > 0 && !outputModalities.includes("image")) {
+    return false;
+  }
+
+  const endpoints = normalizeStringArray(entry.supported_endpoints);
+  if (endpoints.length > 0) {
+    return endpoints.some((endpoint) => IMAGE_ENDPOINTS.has(endpoint));
+  }
+
+  if (typeof entry.type !== "string" || entry.type.trim().length === 0) {
+    return false;
+  }
+  return IMAGE_MODEL_TYPES.has(entry.type.trim().toLowerCase());
 }
 
 export function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry) {
@@ -203,6 +240,25 @@ export function buildOmniRouteEmbeddingModelFromCatalogEntry(
       id,
     ...(maxInputTokens ? { maxInputTokens } : {}),
     ...(dimensions ? { dimensions } : {}),
+  };
+}
+
+export function buildOmniRouteImageModelFromCatalogEntry(
+  entry: OmniRouteModelEntry,
+): OmniRouteImageModel | null {
+  const id = typeof entry.id === "string" ? entry.id.trim() : "";
+  if (!id || !isImageModelEntry(entry)) {
+    return null;
+  }
+
+  return {
+    id,
+    name:
+      (typeof entry.name === "string" && entry.name.trim()) ||
+      (typeof entry.root === "string" && entry.root.trim()) ||
+      id,
+    supportedSizes: normalizeTrimmedStringArray(entry.supported_sizes),
+    inputModalities: normalizeTrimmedStringArray(entry.input_modalities),
   };
 }
 
@@ -282,6 +338,49 @@ export async function fetchOmniRouteEmbeddingModels(params: {
       continue;
     }
     const model = buildOmniRouteEmbeddingModelFromCatalogEntry(rawEntry);
+    if (!model || seen.has(model.id)) {
+      continue;
+    }
+    seen.add(model.id);
+    models.push(model);
+  }
+
+  return models;
+}
+
+export async function fetchOmniRouteImageModels(params: {
+  baseUrl: string;
+  apiKey?: string;
+  signal?: AbortSignal;
+}): Promise<OmniRouteImageModel[]> {
+  const headers: Record<string, string> = {
+    Accept: "application/json",
+  };
+  if (params.apiKey) {
+    headers.Authorization = `Bearer ${params.apiKey}`;
+  }
+
+  const response = await fetch(`${normalizeBaseUrl(params.baseUrl)}/models`, {
+    headers,
+    signal: params.signal,
+  });
+
+  if (!response.ok) {
+    throw new Error(`OmniRoute image model catalog request failed with HTTP ${response.status}`);
+  }
+
+  const payload = (await response.json()) as OmniRouteModelListResponse;
+  if (!Array.isArray(payload.data)) {
+    throw new Error("OmniRoute model catalog response did not include a data array");
+  }
+
+  const seen = new Set<string>();
+  const models: OmniRouteImageModel[] = [];
+  for (const rawEntry of payload.data) {
+    if (!isRecord(rawEntry)) {
+      continue;
+    }
+    const model = buildOmniRouteImageModelFromCatalogEntry(rawEntry);
     if (!model || seen.has(model.id)) {
       continue;
     }

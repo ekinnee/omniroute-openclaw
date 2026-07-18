@@ -1,4 +1,5 @@
 // OmniRoute plugin entrypoint registers its OpenClaw integration.
+import type { OpenClawPluginDefinition } from "openclaw/plugin-sdk/plugin-entry";
 import {
   buildSingleProviderApiKeyCatalog,
   readConfiguredProviderCatalogEntries,
@@ -15,9 +16,10 @@ import {
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
 import { omniRouteEmbeddingProviderAdapter } from "./embedding-provider.js";
+import { buildOmniRouteImageGenerationProvider } from "./image-generation-provider.js";
 import { buildLiveOmniRouteProvider, buildOmniRouteProvider } from "./provider-catalog.js";
 
-export default defineSingleProviderPluginEntry({
+const plugin: OpenClawPluginDefinition = defineSingleProviderPluginEntry({
   id: OMNIROUTE_PROVIDER_ID,
   name: "OmniRoute Provider",
   description: "Bundled OmniRoute provider plugin",
@@ -81,5 +83,8 @@ export default defineSingleProviderPluginEntry({
   },
   register: (api) => {
     api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);
+    api.registerImageGenerationProvider(buildOmniRouteImageGenerationProvider());
   },
 });
+
+export default plugin;
