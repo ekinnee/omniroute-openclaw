@@ -585,6 +585,7 @@ describe("omniroute provider plugin", () => {
     const registerEmbeddingProvider = vi.fn();
     const registerImageGenerationProvider = vi.fn();
     const registerWebSearchProvider = vi.fn();
+    const registerVideoGenerationProvider = vi.fn();
 
     plugin.default.register({
       registerProvider,
@@ -592,6 +593,7 @@ describe("omniroute provider plugin", () => {
       registerEmbeddingProvider,
       registerImageGenerationProvider,
       registerWebSearchProvider,
+      registerVideoGenerationProvider,
     } as never);
 
     expect(registerProvider).toHaveBeenCalledWith(

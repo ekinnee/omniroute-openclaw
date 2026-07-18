@@ -127,7 +127,7 @@ The plugin currently exposes OmniRoute as an OpenAI-compatible chat provider. Th
 | Web search (`/v1/search`) | ✅ Initial support |
 | Speech (`/v1/audio/speech`) | 🔜 Planned |
 | Transcription (`/v1/audio/transcriptions`) | 🔜 Planned |
-| Video generation (`/v1/videos/generations`) | 🔜 Planned |
+| Video generation (`/v1/videos/generations`) | ✅ Initial support |
 | Music generation (`/v1/music/generations`) | 🔜 Planned |
 
 ### Needs OpenClaw SDK PR (no plugin surface yet)

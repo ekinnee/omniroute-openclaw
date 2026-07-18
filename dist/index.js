@@ -8,6 +8,7 @@ import { omniRouteEmbeddingProviderAdapter } from "./embedding-provider.js";
 import { buildOmniRouteImageGenerationProvider } from "./image-generation-provider.js";
 import { buildLiveOmniRouteProvider, buildOmniRouteProvider } from "./provider-catalog.js";
 import { createOmniRouteWebSearchProvider } from "./web-search-provider.js";
+import { buildOmniRouteVideoGenerationProvider } from "./video-generation-provider.js";
 const plugin = defineSingleProviderPluginEntry({
     id: OMNIROUTE_PROVIDER_ID,
     name: "OmniRoute Provider",
@@ -71,6 +72,7 @@ const plugin = defineSingleProviderPluginEntry({
         api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);
         api.registerImageGenerationProvider(buildOmniRouteImageGenerationProvider());
         api.registerWebSearchProvider(createOmniRouteWebSearchProvider());
+        api.registerVideoGenerationProvider(buildOmniRouteVideoGenerationProvider());
     },
 });
 export default plugin;
