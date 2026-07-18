@@ -2,11 +2,14 @@
 import type { ModelProviderConfig } from "openclaw/plugin-sdk/provider-model-shared";
 import type { ProviderCatalogContext } from "openclaw/plugin-sdk/provider-catalog-shared";
 import { getCachedLiveCatalogValue } from "openclaw/plugin-sdk/provider-catalog-shared";
+import { createSubsystemLogger } from "openclaw/plugin-sdk/core";
 import {
   OMNIROUTE_BASE_URL_ENV_VAR,
   buildOmniRouteDefaultModel,
   OMNIROUTE_DEFAULT_BASE_URL,
 } from "./models.js";
+
+const log = createSubsystemLogger("omniroute");
 
 export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL): ModelProviderConfig {
   return {
@@ -412,7 +415,11 @@ export async function buildLiveOmniRouteProvider(
         shouldCache: (models) => models.length > 0,
       }),
     };
-  } catch {
+  } catch (err) {
+    log.warn(
+      `Live model discovery failed, falling back to static catalog`,
+      { baseUrl, error: err instanceof Error ? err.message : String(err) },
+    );
     return {
       ...buildOmniRouteProvider(baseUrl),
       baseUrl,
