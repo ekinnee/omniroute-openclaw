@@ -47,7 +47,7 @@ This is useful for Docker, remote, or cloud-hosted OmniRoute instances.
 ### Embeddings
 
 OmniRoute can also serve OpenClaw embedding requests through `POST /v1/embeddings`.
-Configure an explicit embedding model from OmniRoute's `GET /v1/models` response:
+Configure a specific embedding model from OmniRoute's `GET /v1/models` response:
 
 ```json5
 {
@@ -67,7 +67,7 @@ The plugin does not default embeddings to `auto`. Embedding model and dimensiona
 ### Image Generation
 
 OmniRoute can serve OpenClaw image generation requests through `POST /v1/images/generations`.
-Configure an explicit image model from OmniRoute's `GET /v1/models` response:
+Configure a specific image model from OmniRoute's `GET /v1/models` response:
 
 ```json5
 {
@@ -107,8 +107,8 @@ The web search tool supports `query`, `count` (1-10), `freshness` (day/week/mont
 1. **Live model discovery** — On startup, the plugin fetches `GET /v1/models` from your OmniRoute gateway and registers chat-capable rows as `omniroute/<model-id>`. These models are available at runtime for model routing and inference. Note that `openclaw models list` reads from the cached static catalog and may only show the `auto` fallback model — the full live-discovered catalog is used during actual routing.
 2. **Static fallback** — The `omniroute/auto` model is available when OmniRoute is offline or unauthenticated, so setup can proceed without a running gateway. When live discovery succeeds, `auto` is shown only if OmniRoute returns it.
 3. **OpenAI-compatible transport** — Text requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
-4. **Explicit embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint, but require a configured embedding model instead of falling back to `auto`.
-5. **Explicit image generation** — Image requests use OmniRoute's OpenAI-compatible `POST /v1/images/generations` endpoint with a configured image model.
+4. **Configured embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint, but require a configured embedding model instead of falling back to `auto`.
+5. **Configured image generation** — Image requests use OmniRoute's OpenAI-compatible `POST /v1/images/generations` endpoint with a configured image model.
 6. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
 
 ## Roadmap
