@@ -103,7 +103,7 @@ The plugin currently exposes OmniRoute as an OpenAI-compatible chat provider. Th
 | Image generation (`/v1/images/generations`) | ✅ Initial support |
 | Speech (`/v1/audio/speech`) | 🔜 Planned |
 | Transcription (`/v1/audio/transcriptions`) | 🔍 Investigating |
-| Web search (`/v1/search`) | 🔜 Planned |
+| Web search (`/v1/search`) | 🔜 Next planned |
 | Video / music generation | 🔜 Planned |
 | Files, batches, rerank, moderation | ⏳ Tracking upstream |
 

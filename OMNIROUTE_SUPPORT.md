@@ -14,6 +14,8 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Live chat model discovery: `GET /v1/models`
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 - Image generation provider: `omniroute`, backed by `POST /v1/images/generations`
+- Latest released plugin version: `0.1.4`
+- Next planned capability: web search through `GET/POST /v1/search`
 
 The text provider uses OmniRoute's live model catalog when available and filters the response to chat-capable rows. Successful live discovery treats `GET /v1/models` as the source of truth; `auto` is only added by the static fallback path when live discovery fails. Embeddings and image generation require explicit models from OmniRoute's model catalog and never synthesize `auto`.
 
@@ -31,7 +33,7 @@ The text provider uses OmniRoute's live model catalog when available and filters
 | `POST /v1/audio/transcriptions` | Realtime transcription or future batch STT provider | Investigate |
 | `POST /v1/rerank` | No obvious public registration point yet | Track upstream OpenClaw |
 | `POST /v1/moderations` | No obvious public registration point yet | Track upstream OpenClaw |
-| `GET/POST /v1/search` | Web search provider | Planned |
+| `GET/POST /v1/search` | Web search provider | Next planned |
 | `POST /v1/videos/generations` | Video generation provider | Planned |
 | `POST /v1/music/generations` | Music generation provider | Planned |
 | `/v1/files`, `/v1/batches` | File and batch APIs | Track upstream OpenClaw |
@@ -42,10 +44,11 @@ The text provider uses OmniRoute's live model catalog when available and filters
 1. Keep live catalog handling aligned with OmniRoute's `GET /v1/models` response: preserve ids exactly, include untyped chat/combo/provider rows, honor `supported_endpoints`, and avoid synthesizing live-only models.
 2. Keep embedding model handling explicit: filter `GET /v1/models` to embedding-capable rows, preserve ids exactly, include dimensionality in runtime/cache identity when OpenClaw provides it, and fail clearly when no embedding model is configured.
 3. Keep image generation explicit and generation-only for the first cut: filter `GET /v1/models` to image-capable rows, preserve ids exactly, pass size/count through to `/v1/images/generations`, and reject reference images until edits are implemented.
-4. Add `registerModelCatalogProvider` rows for richer media-generation picker/help surfaces. Keep endpoint calls and OmniRoute response projection inside this plugin.
-5. Add capability-specific registrations for speech, video generation, music generation, and search using exported OpenClaw SDK helpers.
-6. Consider dynamic model resolution only if OpenClaw needs it for catalog-listed OmniRoute rows that cannot be represented through live discovery.
-7. Track endpoints without clear OpenClaw plugin capability surfaces rather than creating custom ad hoc transports.
+4. Add web search support next: map OpenClaw's web-search provider contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
+5. Add `registerModelCatalogProvider` rows for richer media-generation picker/help surfaces. Keep endpoint calls and OmniRoute response projection inside this plugin.
+6. Add capability-specific registrations for speech, video generation, and music generation using exported OpenClaw SDK helpers.
+7. Consider dynamic model resolution only if OpenClaw needs it for catalog-listed OmniRoute rows that cannot be represented through live discovery.
+8. Track endpoints without clear OpenClaw plugin capability surfaces rather than creating custom ad hoc transports.
 
 ## Compatibility Notes
 
