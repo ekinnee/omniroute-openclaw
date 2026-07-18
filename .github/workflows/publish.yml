@@ -11,10 +11,20 @@ on:
         default: true
 
 jobs:
-  publish:
+  publish_release:
+    if: github.event_name == 'release'
     uses: openclaw/clawhub/.github/workflows/package-publish.yml@main
     with:
       source: ekinnee/omniroute-openclaw
-      dry_run: ${{ github.event_name == 'workflow_dispatch' && fromJSON(inputs.dry_run) || false }}
+      dry_run: false
+    secrets:
+      clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
+
+  publish_dispatch:
+    if: github.event_name == 'workflow_dispatch'
+    uses: openclaw/clawhub/.github/workflows/package-publish.yml@main
+    with:
+      source: ekinnee/omniroute-openclaw
+      dry_run: ${{ inputs.dry_run }}
     secrets:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
