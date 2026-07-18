@@ -104,7 +104,7 @@ The web search tool supports `query`, `count` (1-10), `freshness` (day/week/mont
 
 ## How It Works
 
-1. **Live model discovery** — On startup, the plugin fetches `GET /v1/models` from your OmniRoute gateway and registers chat-capable rows as `omniroute/<model-id>`. Successful live discovery treats OmniRoute's catalog as the source of truth.
+1. **Live model discovery** — On startup, the plugin fetches `GET /v1/models` from your OmniRoute gateway and registers chat-capable rows as `omniroute/<model-id>`. These models are available at runtime for model routing and inference. Note that `openclaw models list` reads from the cached static catalog and may only show the `auto` fallback model — the full live-discovered catalog is used during actual routing.
 2. **Static fallback** — The `omniroute/auto` model is available when OmniRoute is offline or unauthenticated, so setup can proceed without a running gateway. When live discovery succeeds, `auto` is shown only if OmniRoute returns it.
 3. **OpenAI-compatible transport** — Text requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
 4. **Explicit embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint, but require a configured embedding model instead of falling back to `auto`.
