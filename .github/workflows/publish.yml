@@ -13,6 +13,10 @@ on:
 jobs:
   publish_release:
     if: github.event_name == 'release'
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
     uses: openclaw/clawhub/.github/workflows/package-publish.yml@main
     with:
       source: ekinnee/omniroute-openclaw
@@ -22,6 +26,10 @@ jobs:
 
   publish_dispatch:
     if: github.event_name == 'workflow_dispatch'
+    permissions:
+      actions: read
+      contents: read
+      id-token: write
     uses: openclaw/clawhub/.github/workflows/package-publish.yml@main
     with:
       source: ekinnee/omniroute-openclaw
