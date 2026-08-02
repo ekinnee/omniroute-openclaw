@@ -1,1 +1,1 @@
-{"version":3,"file":"video-generation-provider.d.ts","sourceRoot":"","sources":["../video-generation-provider.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,uBAAuB,EAA0B,MAAM,sCAAsC,CAAC;AAoC5G,wBAAgB,qCAAqC,IAAI,uBAAuB,CAwG/E"}
+{"version":3,"file":"video-generation-provider.d.ts","sourceRoot":"","sources":["../video-generation-provider.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,iBAAiB,EAAE,MAAM,kCAAkC,CAAC;AAc1E,KAAK,uBAAuB,GAAG,UAAU,CAAC,iBAAiB,CAAC,iCAAiC,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC;AAiDnG,wBAAgB,qCAAqC,IAAI,uBAAuB,CA0E/E"}

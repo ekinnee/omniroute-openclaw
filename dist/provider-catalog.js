@@ -1,7 +1,17 @@
-import { getCachedLiveCatalogValue } from "openclaw/plugin-sdk/provider-catalog-shared";
-import { createSubsystemLogger } from "openclaw/plugin-sdk/core";
 import { OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_MODEL_ID, buildOmniRouteDefaultModel, OMNIROUTE_DEFAULT_BASE_URL, } from "./models.js";
-const log = createSubsystemLogger("omniroute");
+const liveCatalogCache = new Map();
+const LIVE_CATALOG_TTL_MS = 30_000;
+function getCachedLiveCatalogValue(params) {
+    const now = Date.now();
+    const existing = liveCatalogCache.get(params.key);
+    if (existing && existing.expiresAt > now) {
+        return existing.value;
+    }
+    const value = params.load();
+    liveCatalogCache.set(params.key, { expiresAt: now + LIVE_CATALOG_TTL_MS, value });
+    void value.catch(() => liveCatalogCache.delete(params.key));
+    return value;
+}
 export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL) {
     return {
         baseUrl: normalizeBaseUrl(baseUrl),
@@ -224,21 +234,47 @@ export async function buildLiveOmniRouteProvider(ctx) {
             baseUrl,
             api: "openai-completions",
             models: await getCachedLiveCatalogValue({
-                keyParts: ["omniroute", "chat-models", baseUrl, auth.mode, auth.source, Boolean(apiKey)],
+                key: JSON.stringify([
+                    "omniroute",
+                    "chat-models",
+                    baseUrl,
+                    auth.mode,
+                    auth.source,
+                    Boolean(apiKey),
+                ]),
                 load: () => fetchOmniRouteChatModels({
                     baseUrl,
                     apiKey,
                 }),
-                shouldCache: (models) => models.length > 0,
             }),
         };
     }
     catch (err) {
-        log.warn(`Live model discovery failed, falling back to static catalog`, { baseUrl, error: err instanceof Error ? err.message : String(err) });
+        console.warn(`[omniroute] Live model discovery failed, falling back to static catalog (${baseUrl}): ${err instanceof Error ? err.message : String(err)}`);
         return {
             ...buildOmniRouteProvider(baseUrl),
             baseUrl,
         };
     }
+}
+export async function buildOmniRouteCatalog(ctx, live) {
+    const apiKey = ctx.resolveProviderApiKey("omniroute").apiKey;
+    if (!apiKey) {
+        return null;
+    }
+    const configuredProvider = ctx.config.models?.providers?.omniroute;
+    const configuredBaseUrl = typeof configuredProvider?.baseUrl === "string" && configuredProvider.baseUrl.trim()
+        ? configuredProvider.baseUrl.trim().replace(/\/+$/, "")
+        : undefined;
+    const provider = live
+        ? await buildLiveOmniRouteProvider(ctx)
+        : buildOmniRouteProvider(configuredBaseUrl ?? resolveConfiguredBaseUrl(ctx));
+    return {
+        provider: {
+            ...provider,
+            ...(configuredBaseUrl ? { baseUrl: configuredBaseUrl } : {}),
+            apiKey,
+        },
+    };
 }
 //# sourceMappingURL=provider-catalog.js.map

@@ -1,17 +1,46 @@
-import type { ModelProviderConfig } from "openclaw/plugin-sdk/provider-model-shared";
-import type { ProviderCatalogContext } from "openclaw/plugin-sdk/provider-catalog-shared";
-import { getCachedLiveCatalogValue } from "openclaw/plugin-sdk/provider-catalog-shared";
-import { createSubsystemLogger } from "openclaw/plugin-sdk/core";
+import type {
+  ProviderCatalogContext,
+  ProviderCatalogResult,
+} from "openclaw/plugin-sdk/plugin-entry";
 import {
   OMNIROUTE_BASE_URL_ENV_VAR,
   OMNIROUTE_DEFAULT_MODEL_ID,
   buildOmniRouteDefaultModel,
+  type OmniRouteModelDefinition,
   OMNIROUTE_DEFAULT_BASE_URL,
 } from "./models.js";
 
-const log = createSubsystemLogger("omniroute");
+type OmniRouteProviderConfig = {
+  baseUrl: string;
+  api: "openai-completions";
+  models: OmniRouteModelDefinition[];
+  apiKey?: string;
+};
 
-export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL): ModelProviderConfig {
+type LiveCatalogCacheEntry = {
+  expiresAt: number;
+  value: Promise<OmniRouteModelDefinition[]>;
+};
+
+const liveCatalogCache = new Map<string, LiveCatalogCacheEntry>();
+const LIVE_CATALOG_TTL_MS = 30_000;
+
+function getCachedLiveCatalogValue(params: {
+  key: string;
+  load: () => Promise<OmniRouteModelDefinition[]>;
+}): Promise<OmniRouteModelDefinition[]> {
+  const now = Date.now();
+  const existing = liveCatalogCache.get(params.key);
+  if (existing && existing.expiresAt > now) {
+    return existing.value;
+  }
+  const value = params.load();
+  liveCatalogCache.set(params.key, { expiresAt: now + LIVE_CATALOG_TTL_MS, value });
+  void value.catch(() => liveCatalogCache.delete(params.key));
+  return value;
+}
+
+export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL): OmniRouteProviderConfig {
   return {
     baseUrl: normalizeBaseUrl(baseUrl),
     api: "openai-completions",
@@ -308,7 +337,7 @@ export async function fetchOmniRouteChatModels(params: {
   baseUrl: string;
   apiKey?: string;
   signal?: AbortSignal;
-}): Promise<ModelProviderConfig["models"]> {
+}): Promise<OmniRouteModelDefinition[]> {
   return fetchOmniRouteModels(params, buildOmniRouteModelFromCatalogEntry, "chat");
 }
 
@@ -330,7 +359,7 @@ export async function fetchOmniRouteImageModels(params: {
 
 export async function buildLiveOmniRouteProvider(
   ctx: ProviderCatalogContext,
-): Promise<ModelProviderConfig> {
+): Promise<OmniRouteProviderConfig> {
   const baseUrl = resolveConfiguredBaseUrl(ctx);
   const auth = ctx.resolveProviderAuth("omniroute");
   const apiKey = auth.discoveryApiKey ?? auth.apiKey;
@@ -340,23 +369,56 @@ export async function buildLiveOmniRouteProvider(
       baseUrl,
       api: "openai-completions",
       models: await getCachedLiveCatalogValue({
-        keyParts: ["omniroute", "chat-models", baseUrl, auth.mode, auth.source, Boolean(apiKey)],
+        key: JSON.stringify([
+          "omniroute",
+          "chat-models",
+          baseUrl,
+          auth.mode,
+          auth.source,
+          Boolean(apiKey),
+        ]),
         load: () =>
           fetchOmniRouteChatModels({
             baseUrl,
             apiKey,
           }),
-        shouldCache: (models) => models.length > 0,
       }),
     };
   } catch (err) {
-    log.warn(
-      `Live model discovery failed, falling back to static catalog`,
-      { baseUrl, error: err instanceof Error ? err.message : String(err) },
+    console.warn(
+      `[omniroute] Live model discovery failed, falling back to static catalog (${baseUrl}): ${
+        err instanceof Error ? err.message : String(err)
+      }`,
     );
     return {
       ...buildOmniRouteProvider(baseUrl),
       baseUrl,
     };
   }
+}
+
+export async function buildOmniRouteCatalog(
+  ctx: ProviderCatalogContext,
+  live: boolean,
+): Promise<ProviderCatalogResult> {
+  const apiKey = ctx.resolveProviderApiKey("omniroute").apiKey;
+  if (!apiKey) {
+    return null;
+  }
+
+  const configuredProvider = ctx.config.models?.providers?.omniroute;
+  const configuredBaseUrl =
+    typeof configuredProvider?.baseUrl === "string" && configuredProvider.baseUrl.trim()
+      ? configuredProvider.baseUrl.trim().replace(/\/+$/, "")
+      : undefined;
+  const provider = live
+    ? await buildLiveOmniRouteProvider(ctx)
+    : buildOmniRouteProvider(configuredBaseUrl ?? resolveConfiguredBaseUrl(ctx));
+  return {
+    provider: {
+      ...provider,
+      ...(configuredBaseUrl ? { baseUrl: configuredBaseUrl } : {}),
+      apiKey,
+    },
+  };
 }

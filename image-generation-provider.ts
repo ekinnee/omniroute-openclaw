@@ -1,23 +1,25 @@
-// OmniRoute image generation provider registration.
-import type {
-  ImageGenerationProvider,
-  ImageGenerationRequest,
-} from "openclaw/plugin-sdk/image-generation";
-import { parseOpenAiCompatibleImageResponse } from "openclaw/plugin-sdk/image-generation";
-import { isProviderApiKeyConfigured } from "openclaw/plugin-sdk/provider-auth";
-import { resolveApiKeyForProvider } from "openclaw/plugin-sdk/provider-auth-runtime";
+// OmniRoute image generation provider using public SDK registration contracts.
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import {
-  assertOkOrThrowHttpError,
-  postJsonRequest,
-  readProviderJsonResponse,
-  resolveProviderHttpRequestConfig,
-  sanitizeConfiguredModelProviderRequest,
-} from "openclaw/plugin-sdk/provider-http";
+  isOmniRouteConfigured,
+  resolveOmniRouteApiKey,
+} from "./auth.js";
+import {
+  assertOmniRouteOk,
+  postOmniRouteJson,
+  readOmniRouteJson,
+  resolveOmniRouteHttpRequestConfig,
+} from "./http.js";
 import {
   OMNIROUTE_DEFAULT_BASE_URL,
   OMNIROUTE_LABEL,
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
+
+type ImageGenerationProvider = Parameters<OpenClawPluginApi["registerImageGenerationProvider"]>[0];
+type ImageGenerationRequest = Parameters<ImageGenerationProvider["generateImage"]>[0];
+type ImageGenerationResult = Awaited<ReturnType<ImageGenerationProvider["generateImage"]>>;
+type GeneratedImageAsset = ImageGenerationResult["images"][number];
 
 const DEFAULT_IMAGE_SIZE = "1024x1024";
 const MAX_IMAGE_COUNT = 4;
@@ -46,15 +48,62 @@ function resolveConfiguredBaseUrl(req: ImageGenerationRequest): string {
     : OMNIROUTE_DEFAULT_BASE_URL;
 }
 
+function sniffMimeType(buffer: Buffer): { mimeType: string; extension: string } {
+  if (buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
+    return { mimeType: "image/png", extension: "png" };
+  }
+  if (buffer.subarray(0, 2).equals(Buffer.from([255, 216]))) {
+    return { mimeType: "image/jpeg", extension: "jpg" };
+  }
+  if (buffer.subarray(0, 4).toString("ascii") === "GIF8") {
+    return { mimeType: "image/gif", extension: "gif" };
+  }
+  if (
+    buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+    buffer.subarray(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return { mimeType: "image/webp", extension: "webp" };
+  }
+  return { mimeType: "image/png", extension: "png" };
+}
+
+function parseImageResponse(payload: unknown): GeneratedImageAsset[] {
+  if (!payload || typeof payload !== "object" || !Array.isArray((payload as { data?: unknown }).data)) {
+    throw new Error("OmniRoute image generation response malformed");
+  }
+  return (payload as { data: unknown[] }).data.map((entry, index) => {
+    if (!entry || typeof entry !== "object") {
+      throw new Error("OmniRoute image generation response malformed");
+    }
+    const item = entry as { b64_json?: unknown; mime_type?: unknown; revised_prompt?: unknown };
+    if (typeof item.b64_json !== "string" || !item.b64_json.trim()) {
+      throw new Error("OmniRoute image generation response missing image data");
+    }
+    const buffer = Buffer.from(item.b64_json, "base64");
+    if (buffer.length === 0) {
+      throw new Error("OmniRoute image generation response missing image data");
+    }
+    const detected = sniffMimeType(buffer);
+    const mimeType = typeof item.mime_type === "string" && item.mime_type.trim()
+      ? item.mime_type.trim()
+      : detected.mimeType;
+    const image: GeneratedImageAsset = {
+      buffer,
+      mimeType,
+      fileName: `omniroute-image-${index + 1}.${detected.extension}`,
+    };
+    if (typeof item.revised_prompt === "string" && item.revised_prompt.trim()) {
+      image.revisedPrompt = item.revised_prompt;
+    }
+    return image;
+  });
+}
+
 export function buildOmniRouteImageGenerationProvider(): ImageGenerationProvider {
   return {
     id: OMNIROUTE_PROVIDER_ID,
     label: OMNIROUTE_LABEL,
-    isConfigured: ({ agentDir }) =>
-      isProviderApiKeyConfigured({
-        provider: OMNIROUTE_PROVIDER_ID,
-        agentDir,
-      }),
+    isConfigured: ({ cfg, agentDir }) => isOmniRouteConfigured({ cfg, agentDir }),
     capabilities: {
       generate: {
         maxCount: MAX_IMAGE_COUNT,
@@ -76,38 +125,30 @@ export function buildOmniRouteImageGenerationProvider(): ImageGenerationProvider
         throw new Error("OmniRoute image edits and reference images are not supported yet.");
       }
       const model = requireImageModel(req.model);
-
-      const auth = await resolveApiKeyForProvider({
-        provider: OMNIROUTE_PROVIDER_ID,
-        cfg: req.cfg,
-        agentDir: req.agentDir,
-        store: req.authStore,
-      });
-      if (!auth.apiKey) {
+      const apiKey = await resolveOmniRouteApiKey({ cfg: req.cfg, agentDir: req.agentDir });
+      if (!apiKey) {
         throw new Error("OmniRoute API key missing");
       }
 
       const providerConfig = req.cfg.models?.providers?.[OMNIROUTE_PROVIDER_ID];
-      const { baseUrl, allowPrivateNetwork, headers, dispatcherPolicy } =
-        resolveProviderHttpRequestConfig({
-          baseUrl: resolveConfiguredBaseUrl(req),
-          defaultBaseUrl: OMNIROUTE_DEFAULT_BASE_URL,
-          request: sanitizeConfiguredModelProviderRequest(providerConfig?.request),
-          defaultHeaders: {
-            Authorization: `Bearer ${auth.apiKey}`,
-          },
-          provider: OMNIROUTE_PROVIDER_ID,
-          capability: "image",
-          transport: "http",
-        });
-      const requestHeaders = new Headers(headers);
-      if (!requestHeaders.has("Content-Type")) {
-        requestHeaders.set("Content-Type", "application/json");
+      const http = resolveOmniRouteHttpRequestConfig({
+        baseUrl: resolveConfiguredBaseUrl(req),
+        defaultBaseUrl: OMNIROUTE_DEFAULT_BASE_URL,
+        request: providerConfig?.request,
+        defaultHeaders: {
+          Accept: "application/json",
+          Authorization: `Bearer ${apiKey}`,
+        },
+        ssrfPolicy: req.ssrfPolicy,
+      });
+      const headers = new Headers(http.headers);
+      if (!headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
       }
 
-      const request = await postJsonRequest({
-        url: `${baseUrl.replace(/\/+$/, "")}/images/generations`,
-        headers: requestHeaders,
+      const request = await postOmniRouteJson({
+        url: `${http.baseUrl}/images/generations`,
+        headers,
         body: {
           model,
           prompt: req.prompt,
@@ -116,33 +157,19 @@ export function buildOmniRouteImageGenerationProvider(): ImageGenerationProvider
           response_format: "b64_json",
         },
         timeoutMs: req.timeoutMs,
-        fetchFn: fetch,
-        allowPrivateNetwork,
-        ssrfPolicy: req.ssrfPolicy,
-        dispatcherPolicy,
+        ssrfPolicy: http.ssrfPolicy,
       });
-
-      const { response, release } = request;
       try {
-        await assertOkOrThrowHttpError(response, "OmniRoute image generation failed");
-        const payload = await readProviderJsonResponse(
-          response,
-          "omniroute.image-generation",
+        await assertOmniRouteOk(request.response, "OmniRoute image generation failed");
+        const images = parseImageResponse(
+          await readOmniRouteJson(request.response, "omniroute.image-generation"),
         );
-        const images = parseOpenAiCompatibleImageResponse(payload, {
-          malformedResponseError: "OmniRoute image generation response malformed",
-          fileNamePrefix: "omniroute-image",
-          sniffMimeType: true,
-        });
         if (images.length === 0) {
           throw new Error("OmniRoute image generation response missing image data");
         }
-        return {
-          images,
-          model,
-        };
+        return { images, model };
       } finally {
-        await release();
+        await request.release();
       }
     },
   };

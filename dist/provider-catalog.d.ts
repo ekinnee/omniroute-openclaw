@@ -1,6 +1,12 @@
-import type { ModelProviderConfig } from "openclaw/plugin-sdk/provider-model-shared";
-import type { ProviderCatalogContext } from "openclaw/plugin-sdk/provider-catalog-shared";
-export declare function buildOmniRouteProvider(baseUrl?: string): ModelProviderConfig;
+import type { ProviderCatalogContext, ProviderCatalogResult } from "openclaw/plugin-sdk/plugin-entry";
+import { type OmniRouteModelDefinition } from "./models.js";
+type OmniRouteProviderConfig = {
+    baseUrl: string;
+    api: "openai-completions";
+    models: OmniRouteModelDefinition[];
+    apiKey?: string;
+};
+export declare function buildOmniRouteProvider(baseUrl?: string): OmniRouteProviderConfig;
 type OmniRouteModelEntry = {
     id?: unknown;
     name?: unknown;
@@ -38,7 +44,7 @@ export declare function fetchOmniRouteChatModels(params: {
     baseUrl: string;
     apiKey?: string;
     signal?: AbortSignal;
-}): Promise<ModelProviderConfig["models"]>;
+}): Promise<OmniRouteModelDefinition[]>;
 export declare function fetchOmniRouteEmbeddingModels(params: {
     baseUrl: string;
     apiKey?: string;
@@ -49,6 +55,7 @@ export declare function fetchOmniRouteImageModels(params: {
     apiKey?: string;
     signal?: AbortSignal;
 }): Promise<OmniRouteImageModel[]>;
-export declare function buildLiveOmniRouteProvider(ctx: ProviderCatalogContext): Promise<ModelProviderConfig>;
+export declare function buildLiveOmniRouteProvider(ctx: ProviderCatalogContext): Promise<OmniRouteProviderConfig>;
+export declare function buildOmniRouteCatalog(ctx: ProviderCatalogContext, live: boolean): Promise<ProviderCatalogResult>;
 export {};
 //# sourceMappingURL=provider-catalog.d.ts.map

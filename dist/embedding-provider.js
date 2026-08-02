@@ -1,6 +1,6 @@
-// OmniRoute embedding provider registration.
-import { getEmbeddingProvider, } from "openclaw/plugin-sdk/embedding-providers";
-import { OMNIROUTE_PROVIDER_ID } from "./models.js";
+import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
+import { resolveOmniRouteApiKey } from "./auth.js";
+import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 function requireEmbeddingModel(model) {
     const normalized = model.trim();
     if (!normalized) {
@@ -8,25 +8,25 @@ function requireEmbeddingModel(model) {
     }
     return normalized;
 }
-function buildDelegatedOptions(options) {
-    return {
-        ...options,
-        provider: OMNIROUTE_PROVIDER_ID,
-        model: requireEmbeddingModel(options.model),
-    };
+function readProviderConfig(options) {
+    return options.config.models?.providers?.[OMNIROUTE_PROVIDER_ID];
 }
-function readIdentityBaseUrl(options) {
-    const provider = options.config.models?.providers?.[OMNIROUTE_PROVIDER_ID];
-    const baseUrl = options.remote?.baseUrl ?? provider?.baseUrl;
-    return typeof baseUrl === "string" && baseUrl.trim()
-        ? baseUrl.trim().replace(/\/+$/, "")
+function readBaseUrl(options) {
+    const configured = options.remote?.baseUrl ?? readProviderConfig(options)?.baseUrl;
+    return typeof configured === "string" && configured.trim()
+        ? configured.trim().replace(/\/+$/, "")
+        : OMNIROUTE_DEFAULT_BASE_URL;
+}
+function readRemoteApiKey(options) {
+    return typeof options.remote?.apiKey === "string" && options.remote.apiKey.trim()
+        ? options.remote.apiKey.trim()
         : undefined;
 }
-function buildFallbackCacheKeyData(options) {
-    const baseUrl = readIdentityBaseUrl(options);
+function buildCacheKeyData(options) {
+    const baseUrl = readBaseUrl(options);
     return {
         provider: OMNIROUTE_PROVIDER_ID,
-        ...(baseUrl ? { baseUrl } : {}),
+        baseUrl,
         model: options.model,
         ...(typeof options.dimensions === "number" ? { dimensions: options.dimensions } : {}),
         ...(options.inputType ? { inputType: options.inputType } : {}),
@@ -34,52 +34,121 @@ function buildFallbackCacheKeyData(options) {
         ...(options.documentInputType ? { documentInputType: options.documentInputType } : {}),
     };
 }
-async function createOmniRouteEmbeddingProvider(options) {
-    const adapter = getEmbeddingProvider("openai-compatible", options.config);
-    if (!adapter) {
-        throw new Error("OmniRoute embeddings require OpenClaw's openai-compatible embedding provider.");
+function normalizeEmbeddingInput(input) {
+    if (typeof input === "string") {
+        return input;
     }
-    const result = await adapter.create(buildDelegatedOptions(options));
-    if (!result.provider) {
-        return result;
+    if (input.parts?.some((part) => part.type !== "text")) {
+        throw new Error("OmniRoute embeddings do not support inline-data input parts");
     }
-    return {
-        provider: {
-            ...result.provider,
-            id: OMNIROUTE_PROVIDER_ID,
+    return input.text;
+}
+function parseEmbeddingVectors(payload, expectedCount) {
+    if (!payload || typeof payload !== "object" || !Array.isArray(payload.data)) {
+        throw new Error("OmniRoute embeddings response missing data");
+    }
+    const data = payload.data
+        .map((item, index) => {
+        if (!item || typeof item !== "object") {
+            throw new Error(`OmniRoute embeddings response item ${index} malformed`);
+        }
+        const embedding = item.embedding;
+        if (!Array.isArray(embedding) || !embedding.every((value) => typeof value === "number")) {
+            throw new Error(`OmniRoute embeddings response item ${index} missing embedding`);
+        }
+        return {
+            index: typeof item.index === "number"
+                ? item.index
+                : index,
+            embedding,
+        };
+    })
+        .sort((left, right) => left.index - right.index);
+    if (data.length !== expectedCount) {
+        throw new Error(`OmniRoute embeddings response returned ${data.length} vectors for ${expectedCount} inputs`);
+    }
+    return data.map((item) => item.embedding);
+}
+async function requestEmbeddings(options, inputs, callOptions) {
+    const apiKey = readRemoteApiKey(options) ?? (await resolveOmniRouteApiKey({
+        cfg: options.config,
+        agentDir: options.agentDir,
+    }));
+    if (!apiKey) {
+        throw new Error("OmniRoute API key missing");
+    }
+    const providerConfig = readProviderConfig(options);
+    const http = resolveOmniRouteHttpRequestConfig({
+        baseUrl: readBaseUrl(options),
+        defaultBaseUrl: OMNIROUTE_DEFAULT_BASE_URL,
+        request: providerConfig?.request,
+        defaultHeaders: {
+            Accept: "application/json",
+            Authorization: `Bearer ${apiKey}`,
         },
-        ...(result.runtime
-            ? {
-                runtime: {
-                    ...result.runtime,
-                    id: OMNIROUTE_PROVIDER_ID,
-                },
-            }
-            : {}),
+    });
+    const headers = new Headers(http.headers);
+    for (const [key, value] of Object.entries(options.remote?.headers ?? {})) {
+        headers.set(key, value);
+    }
+    if (!headers.has("Content-Type")) {
+        headers.set("Content-Type", "application/json");
+    }
+    const body = {
+        model: requireEmbeddingModel(options.model),
+        input: inputs.map(normalizeEmbeddingInput),
+    };
+    if (typeof options.dimensions === "number") {
+        body.dimensions = options.dimensions;
+    }
+    if (options.inputType) {
+        body.input_type = options.inputType;
+    }
+    const request = await postOmniRouteJson({
+        url: `${http.baseUrl}/embeddings`,
+        headers,
+        body,
+        signal: callOptions?.signal,
+        timeoutMs: inputs.length > 1 ? 600_000 : undefined,
+        ssrfPolicy: http.ssrfPolicy,
+    });
+    try {
+        await assertOmniRouteOk(request.response, "OmniRoute embeddings failed");
+        return parseEmbeddingVectors(await readOmniRouteJson(request.response, "omniroute.embeddings"), inputs.length);
+    }
+    finally {
+        await request.release();
+    }
+}
+async function createOmniRouteEmbeddingProvider(options) {
+    const model = requireEmbeddingModel(options.model);
+    const provider = {
+        id: OMNIROUTE_PROVIDER_ID,
+        model,
+        ...(typeof options.dimensions === "number" ? { dimensions: options.dimensions } : {}),
+        embed: async (input, callOptions) => (await requestEmbeddings(options, [input], callOptions))[0] ?? [],
+        embedBatch: async (inputs, callOptions) => requestEmbeddings(options, inputs, callOptions),
+    };
+    return {
+        provider,
+        runtime: {
+            id: OMNIROUTE_PROVIDER_ID,
+            cacheKeyData: buildCacheKeyData({ ...options, model }),
+            inlineBatchTimeoutMs: 600_000,
+        },
     };
 }
 export const omniRouteEmbeddingProviderAdapter = {
     id: OMNIROUTE_PROVIDER_ID,
     transport: "remote",
     authProviderId: OMNIROUTE_PROVIDER_ID,
-    resolveIndexIdentity: (options) => {
-        const adapter = getEmbeddingProvider("openai-compatible", options.config);
-        const delegatedOptions = buildDelegatedOptions(options);
-        const identity = adapter?.resolveIndexIdentity?.(delegatedOptions);
-        if (identity) {
-            return {
-                ...identity,
-                cacheKeyData: {
-                    ...identity.cacheKeyData,
-                    provider: OMNIROUTE_PROVIDER_ID,
-                },
-            };
-        }
-        return {
-            model: delegatedOptions.model,
-            cacheKeyData: buildFallbackCacheKeyData(delegatedOptions),
-        };
-    },
+    resolveIndexIdentity: (options) => ({
+        model: requireEmbeddingModel(options.model),
+        cacheKeyData: buildCacheKeyData({
+            ...options,
+            model: requireEmbeddingModel(options.model),
+        }),
+    }),
     create: createOmniRouteEmbeddingProvider,
 };
 //# sourceMappingURL=embedding-provider.js.map

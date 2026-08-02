@@ -1,4 +1,4 @@
-import { assertOkOrThrowHttpError, postJsonRequest, readProviderJsonResponse, resolveProviderHttpRequestConfig, sanitizeConfiguredModelProviderRequest, } from "openclaw/plugin-sdk/provider-http";
+import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 const MAX_SEARCH_COUNT = 10;
 const DEFAULT_SEARCH_COUNT = 5;
@@ -26,36 +26,28 @@ export function createOmniRouteWebSearchProvider() {
         placeholder: "Search the web via OmniRoute",
         signupUrl: "",
         credentialPath: `models.providers.${OMNIROUTE_PROVIDER_ID}.apiKey`,
-        getCredentialValue: (searchConfig) => {
-            const cfg = searchConfig;
-            return cfg?.apiKey;
-        },
+        getCredentialValue: (searchConfig) => searchConfig?.apiKey,
         setCredentialValue: (searchConfigTarget, value) => {
-            const target = searchConfigTarget;
-            target.apiKey = value;
+            searchConfigTarget.apiKey = value;
         },
         createTool: (ctx) => {
-            // Resolve API key from search config or env
             const searchConfig = ctx.searchConfig;
-            const apiKey = searchConfig?.apiKey ??
+            const apiKey = (typeof searchConfig?.apiKey === "string" ? searchConfig.apiKey : undefined) ??
                 process.env[OMNIROUTE_API_KEY_ENV_VAR] ??
                 "";
-            // Resolve base URL from provider config
             const providerConfig = ctx.config?.models?.providers?.[OMNIROUTE_PROVIDER_ID];
             const configuredBaseUrl = providerConfig?.baseUrl;
             const baseUrl = typeof configuredBaseUrl === "string" && configuredBaseUrl.trim()
                 ? configuredBaseUrl.trim().replace(/\/+$/, "")
                 : OMNIROUTE_DEFAULT_BASE_URL;
-            const { baseUrl: resolvedBaseUrl, allowPrivateNetwork, headers, dispatcherPolicy } = resolveProviderHttpRequestConfig({
+            const http = resolveOmniRouteHttpRequestConfig({
                 baseUrl,
                 defaultBaseUrl: OMNIROUTE_DEFAULT_BASE_URL,
-                request: sanitizeConfiguredModelProviderRequest(providerConfig?.request),
+                request: providerConfig?.request,
                 defaultHeaders: {
+                    Accept: "application/json",
                     Authorization: `Bearer ${apiKey}`,
                 },
-                provider: OMNIROUTE_PROVIDER_ID,
-                capability: "other",
-                transport: "http",
             });
             return {
                 description: "Search the web using OmniRoute's multi-provider search endpoint. " +
@@ -98,50 +90,55 @@ export function createOmniRouteWebSearchProvider() {
                     if (!apiKey) {
                         return { error: "OmniRoute API key is not configured." };
                     }
-                    const count = resolveSearchCount(args.count);
-                    const freshness = resolveFreshness(typeof args.freshness === "string" ? args.freshness : undefined);
-                    const requestHeaders = new Headers(headers);
-                    if (!requestHeaders.has("Content-Type")) {
-                        requestHeaders.set("Content-Type", "application/json");
+                    const headers = new Headers(http.headers);
+                    if (!headers.has("Content-Type")) {
+                        headers.set("Content-Type", "application/json");
                     }
                     const body = {
                         model: "auto",
                         query,
-                        max_results: count,
+                        max_results: resolveSearchCount(args.count),
                     };
+                    const freshness = resolveFreshness(typeof args.freshness === "string" ? args.freshness : undefined);
                     if (freshness) {
                         body.freshness = freshness;
                     }
-                    const request = await postJsonRequest({
-                        url: `${resolvedBaseUrl.replace(/\/+$/, "")}/search`,
-                        headers: requestHeaders,
+                    if (typeof args.country === "string" && args.country.trim()) {
+                        body.country = args.country.trim();
+                    }
+                    if (typeof args.language === "string" && args.language.trim()) {
+                        body.language = args.language.trim();
+                    }
+                    const request = await postOmniRouteJson({
+                        url: `${http.baseUrl}/search`,
+                        headers,
                         body,
                         timeoutMs: 30_000,
-                        fetchFn: fetch,
-                        allowPrivateNetwork,
-                        dispatcherPolicy,
+                        ssrfPolicy: http.ssrfPolicy,
                     });
-                    const { response, release } = request;
                     try {
-                        await assertOkOrThrowHttpError(response, "OmniRoute web search failed");
-                        const payload = (await readProviderJsonResponse(response, "omniroute.web-search"));
-                        const rawResults = payload.results;
-                        const results = Array.isArray(rawResults) ? rawResults : [];
-                        if (results.length === 0) {
-                            return { results: [] };
-                        }
+                        await assertOmniRouteOk(request.response, "OmniRoute web search failed");
+                        const payload = await readOmniRouteJson(request.response, "omniroute.web-search");
+                        const rawResults = payload && typeof payload === "object" && Array.isArray(payload.results)
+                            ? payload.results
+                            : [];
                         return {
-                            results: results.map((r) => ({
-                                title: String(r.title ?? ""),
-                                url: String(r.url ?? ""),
-                                snippet: String(r.snippet ?? ""),
-                                content: r.content ? String(r.content) : undefined,
-                                publishedAt: r.published_at ? String(r.published_at) : undefined,
-                            })),
+                            results: rawResults.map((result) => {
+                                const item = result && typeof result === "object"
+                                    ? result
+                                    : {};
+                                return {
+                                    title: String(item.title ?? ""),
+                                    url: String(item.url ?? ""),
+                                    snippet: String(item.snippet ?? ""),
+                                    content: item.content ? String(item.content) : undefined,
+                                    publishedAt: item.published_at ? String(item.published_at) : undefined,
+                                };
+                            }),
                         };
                     }
                     finally {
-                        await release();
+                        await request.release();
                     }
                 },
             };
