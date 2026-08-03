@@ -1,3 +1,4 @@
+// OmniRoute model metadata for the thin OpenAI-compatible provider wrapper.
 export const OMNIROUTE_PROVIDER_ID = "omniroute";
 export const OMNIROUTE_LABEL = "OmniRoute";
 export const OMNIROUTE_API_KEY_ENV_VAR = "OMNIROUTE_API_KEY";

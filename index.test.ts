@@ -5,47 +5,14 @@ import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const MIN_OPENCLAW_VERSION = "2026.5.22";
+const MIN_OPENCLAW_VERSION = "2026.7.1";
 const REQUIRED_OPENCLAW_SDK_EXPORTS = [
-  "./plugin-sdk/embedding-providers",
-  "./plugin-sdk/image-generation",
-  "./plugin-sdk/provider-auth-runtime",
-  "./plugin-sdk/provider-http",
+  "./plugin-sdk/agent-runtime",
+  "./plugin-sdk/plugin-entry",
+  "./plugin-sdk/provider-auth",
+  "./plugin-sdk/secret-input-runtime",
+  "./plugin-sdk/ssrf-runtime",
 ] as const;
-
-const embeddingProviderMocks = vi.hoisted(() => ({
-  getEmbeddingProvider: vi.fn(),
-}));
-const providerAuthMocks = vi.hoisted(() => ({
-  isProviderApiKeyConfigured: vi.fn(),
-}));
-const providerAuthRuntimeMocks = vi.hoisted(() => ({
-  resolveApiKeyForProvider: vi.fn(),
-}));
-const providerHttpMocks = vi.hoisted(() => ({
-  assertOkOrThrowHttpError: vi.fn(),
-  postJsonRequest: vi.fn(),
-  readProviderJsonResponse: vi.fn(),
-  resolveProviderHttpRequestConfig: vi.fn(),
-  sanitizeConfiguredModelProviderRequest: vi.fn((value) => value),
-}));
-
-vi.mock("openclaw/plugin-sdk/embedding-providers", () => ({
-  getEmbeddingProvider: embeddingProviderMocks.getEmbeddingProvider,
-}));
-vi.mock("openclaw/plugin-sdk/provider-auth", () => ({
-  isProviderApiKeyConfigured: providerAuthMocks.isProviderApiKeyConfigured,
-}));
-vi.mock("openclaw/plugin-sdk/provider-auth-runtime", () => ({
-  resolveApiKeyForProvider: providerAuthRuntimeMocks.resolveApiKeyForProvider,
-}));
-vi.mock("openclaw/plugin-sdk/provider-http", () => ({
-  assertOkOrThrowHttpError: providerHttpMocks.assertOkOrThrowHttpError,
-  postJsonRequest: providerHttpMocks.postJsonRequest,
-  readProviderJsonResponse: providerHttpMocks.readProviderJsonResponse,
-  resolveProviderHttpRequestConfig: providerHttpMocks.resolveProviderHttpRequestConfig,
-  sanitizeConfiguredModelProviderRequest: providerHttpMocks.sanitizeConfiguredModelProviderRequest,
-}));
 
 function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string; envBaseUrl?: string }) {
   return {
@@ -74,15 +41,6 @@ function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string; env
 describe("omniroute provider plugin", () => {
   afterEach(() => {
     vi.restoreAllMocks();
-    embeddingProviderMocks.getEmbeddingProvider.mockReset();
-    providerAuthMocks.isProviderApiKeyConfigured.mockReset();
-    providerAuthRuntimeMocks.resolveApiKeyForProvider.mockReset();
-    providerHttpMocks.assertOkOrThrowHttpError.mockReset();
-    providerHttpMocks.postJsonRequest.mockReset();
-    providerHttpMocks.readProviderJsonResponse.mockReset();
-    providerHttpMocks.resolveProviderHttpRequestConfig.mockReset();
-    providerHttpMocks.sanitizeConfiguredModelProviderRequest.mockReset();
-    providerHttpMocks.sanitizeConfiguredModelProviderRequest.mockImplementation((value) => value);
   });
 
   it("has a valid package.json", () => {
@@ -105,6 +63,41 @@ describe("omniroute provider plugin", () => {
     expect(pkg.openclaw.compat.minGatewayVersion).toBe(MIN_OPENCLAW_VERSION);
     for (const exportPath of REQUIRED_OPENCLAW_SDK_EXPORTS) {
       expect(openClawPkg.exports[exportPath]).toBeDefined();
+    }
+  });
+
+  it("keeps runtime source imports on public OpenClaw SDK subpaths", () => {
+    const runtimeFiles = [
+      "index.ts",
+      "models.ts",
+      "onboard.ts",
+      "provider-catalog.ts",
+      "provider-compat.ts",
+      "embedding-provider.ts",
+      "image-generation-provider.ts",
+      "video-generation-provider.ts",
+      "web-search-provider.ts",
+      "auth.ts",
+      "http.ts",
+    ];
+    const privateSubpaths = [
+      "embedding-providers",
+      "image-generation",
+      "provider-auth-runtime",
+      "provider-catalog-shared",
+      "provider-entry",
+      "provider-http",
+      "provider-model-shared",
+      "provider-onboard",
+      "provider-tools",
+      "provider-web-search",
+      "video-generation",
+    ];
+    const source = runtimeFiles
+      .map((file) => readFileSync(resolve(__dirname, file), "utf8"))
+      .join("\n");
+    for (const privateSubpath of privateSubpaths) {
+      expect(source).not.toContain(`openclaw/plugin-sdk/${privateSubpath}`);
     }
   });
 
@@ -600,12 +593,14 @@ describe("omniroute provider plugin", () => {
       expect.objectContaining({
         id: "omniroute",
         label: "OmniRoute",
+        buildReplayPolicy: expect.any(Function),
       }),
     );
-    expect(registerModelCatalogProvider).toHaveBeenCalledWith(
+    expect(registerModelCatalogProvider).not.toHaveBeenCalled();
+    expect(registerProvider).toHaveBeenCalledWith(
       expect.objectContaining({
-        provider: "omniroute",
-        kinds: ["text"],
+        catalog: expect.objectContaining({ run: expect.any(Function) }),
+        staticCatalog: expect.objectContaining({ run: expect.any(Function) }),
       }),
     );
     expect(registerEmbeddingProvider).toHaveBeenCalledWith(
@@ -623,34 +618,20 @@ describe("omniroute provider plugin", () => {
     expect(imageProvider).not.toHaveProperty("defaultModel");
   });
 
-  it("delegates OmniRoute embedding requests through the OpenAI-compatible adapter", async () => {
-    const create = vi.fn(async (options) => ({
-      provider: {
-        id: "openai-compatible",
-        model: options.model,
-        dimensions: options.dimensions,
-        embed: vi.fn(async () => [0.1, 0.2]),
-        embedBatch: vi.fn(async () => [[0.1, 0.2]]),
-      },
-      runtime: {
-        id: "openai-compatible",
-        cacheKeyData: {
-          provider: options.provider,
-          model: options.model,
-          dimensions: options.dimensions,
-        },
-      },
-    }));
-    embeddingProviderMocks.getEmbeddingProvider.mockReturnValue({
-      id: "openai-compatible",
-      create,
-    });
+  it("creates an OmniRoute embedding provider through the guarded public HTTP path", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1, 0.2] }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
     const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
     const config = {
       models: {
         providers: {
           omniroute: {
             api: "openai-completions",
+            apiKey: "secret-key",
             baseUrl: "http://localhost:20128/v1",
           },
         },
@@ -663,19 +644,8 @@ describe("omniroute provider plugin", () => {
       model: "  nebius/Qwen/Qwen3-Embedding-8B  ",
       dimensions: 4096,
     });
+    const vector = await result.provider?.embed("hello");
 
-    expect(embeddingProviderMocks.getEmbeddingProvider).toHaveBeenCalledWith(
-      "openai-compatible",
-      config,
-    );
-    expect(create).toHaveBeenCalledWith(
-      expect.objectContaining({
-        config,
-        provider: "omniroute",
-        model: "nebius/Qwen/Qwen3-Embedding-8B",
-        dimensions: 4096,
-      }),
-    );
     expect(result.provider).toMatchObject({
       id: "omniroute",
       model: "nebius/Qwen/Qwen3-Embedding-8B",
@@ -689,13 +659,167 @@ describe("omniroute provider plugin", () => {
         dimensions: 4096,
       },
     });
+    expect(vector).toEqual([0.1, 0.2]);
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:20128/v1/embeddings",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(requestInit.body))).toMatchObject({
+      model: "nebius/Qwen/Qwen3-Embedding-8B",
+      input: ["hello"],
+      dimensions: 4096,
+    });
+  });
+
+  it("resolves provider profile credentials instead of sending profile ids", async () => {
+    const { resolveOmniRouteApiKey } = await import("./auth.js");
+    const apiKey = await resolveOmniRouteApiKey({
+      cfg: {
+        auth: {
+          profiles: {
+            "omniroute:default": { provider: "omniroute", mode: "api_key" },
+          },
+        },
+        models: {
+          providers: {
+            omniroute: { apiKey: "omniroute:default" },
+          },
+        },
+      } as never,
+      store: {
+        version: 1,
+        profiles: {
+          "omniroute:default": {
+            type: "api_key",
+            provider: "omniroute",
+            key: "resolved-secret",
+          },
+        },
+      } as never,
+    });
+
+    expect(apiKey).toBe("resolved-secret");
+  });
+
+  it("preserves configured request auth, headers, TLS, and proxy policy", async () => {
+    const { resolveOmniRouteHttpRequestConfig } = await import("./http.js");
+    const resolved = resolveOmniRouteHttpRequestConfig({
+      baseUrl: "https://gateway.example/v1",
+      defaultBaseUrl: "http://localhost:20128/v1",
+      request: {
+        headers: { "X-Trace": "trace-value" },
+        auth: {
+          mode: "header",
+          headerName: "X-Gateway-Token",
+          prefix: "Token ",
+          value: "request-secret",
+        },
+        tls: {
+          ca: "target-ca",
+          cert: "target-cert",
+          key: "target-key",
+          serverName: "gateway.example",
+          insecureSkipVerify: true,
+        },
+        proxy: {
+          mode: "explicit-proxy",
+          url: "http://proxy.example:8080",
+          tls: { ca: "proxy-ca" },
+        },
+      },
+      defaultHeaders: { Authorization: "Bearer default" },
+    });
+
+    expect(resolved.headers.get("X-Trace")).toBe("trace-value");
+    expect(resolved.headers.get("X-Gateway-Token")).toBe("Token request-secret");
+    expect(resolved.headers.get("Authorization")).toBeNull();
+    expect(resolved.dispatcherPolicy).toEqual({
+      mode: "explicit-proxy",
+      proxyUrl: "http://proxy.example:8080",
+      proxyTls: { ca: "proxy-ca" },
+    });
+  });
+
+  it("forwards per-call embedding types and text parts", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1] }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: {
+            omniroute: {
+              apiKey: "secret-key",
+              baseUrl: "http://localhost:20128/v1",
+            },
+          },
+        },
+      } as never,
+      model: "embedding-model",
+      inputType: "generic",
+      queryInputType: "query-vector",
+      documentInputType: "document-vector",
+    });
+
+    await result.provider?.embed(
+      {
+        text: "ignored fallback",
+        parts: [
+          { type: "text", text: "hello" },
+          { type: "text", text: " world" },
+        ],
+      },
+      { inputType: "query" },
+    );
+    await result.provider?.embedBatch(["document"], { inputType: "document" });
+
+    const firstBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    const secondBody = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(firstBody).toMatchObject({ input: ["hello world"], input_type: "query-vector" });
+    expect(secondBody).toMatchObject({ input: ["document"], input_type: "document-vector" });
+  });
+
+  it("returns empty embedding batches without contacting OmniRoute", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: { omniroute: { apiKey: "secret-key" } },
+        },
+      } as never,
+      model: "embedding-model",
+    });
+
+    await expect(result.provider?.embedBatch([])).resolves.toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not silently fall back when an embedding SecretInput override is unresolved", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: { omniroute: { apiKey: "provider-secret" } },
+        },
+      } as never,
+      remote: {
+        apiKey: { source: "env", provider: "default", id: "OMNIROUTE_OVERRIDE_KEY" },
+      } as never,
+      model: "embedding-model",
+    });
+
+    await expect(result.provider?.embed("hello")).rejects.toThrow(/unresolved SecretRef/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("requires an explicit OmniRoute embedding model", async () => {
-    embeddingProviderMocks.getEmbeddingProvider.mockReturnValue({
-      id: "openai-compatible",
-      create: vi.fn(),
-    });
     const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
 
     await expect(
@@ -707,10 +831,6 @@ describe("omniroute provider plugin", () => {
   });
 
   it("builds fallback embedding index identity from model, base URL, and dimensions", async () => {
-    embeddingProviderMocks.getEmbeddingProvider.mockReturnValue({
-      id: "openai-compatible",
-      create: vi.fn(),
-    });
     const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
 
     expect(
@@ -739,23 +859,14 @@ describe("omniroute provider plugin", () => {
   });
 
   it("generates OmniRoute images with an explicit model", async () => {
-    providerAuthRuntimeMocks.resolveApiKeyForProvider.mockResolvedValue({ apiKey: "secret-key" });
-    providerHttpMocks.resolveProviderHttpRequestConfig.mockReturnValue({
-      baseUrl: "http://localhost:20128/v1",
-      allowPrivateNetwork: true,
-      headers: new Headers({ Authorization: "Bearer secret-key" }),
-      dispatcherPolicy: undefined,
-    });
-    const release = vi.fn();
-    const response = { ok: true } as never;
-    providerHttpMocks.postJsonRequest.mockResolvedValue({ response, release });
-    providerHttpMocks.readProviderJsonResponse.mockResolvedValue({
-      data: [
-        {
-          b64_json: Buffer.from("generated image").toString("base64"),
-        },
-      ],
-    });
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        data: [{ b64_json: Buffer.from("generated image").toString("base64") }],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
     const { buildOmniRouteImageGenerationProvider } = await import(
       "./image-generation-provider.js"
     );
@@ -771,6 +882,7 @@ describe("omniroute provider plugin", () => {
         models: {
           providers: {
             omniroute: {
+              apiKey: "secret-key",
               baseUrl: "http://localhost:20128/v1/",
               request: { allowPrivateNetwork: true },
             },
@@ -782,46 +894,18 @@ describe("omniroute provider plugin", () => {
 
     expect(provider.defaultModel).toBeUndefined();
     expect(provider.capabilities.edit.enabled).toBe(false);
-    expect(providerAuthRuntimeMocks.resolveApiKeyForProvider).toHaveBeenCalledWith(
-      expect.objectContaining({
-        provider: "omniroute",
-        agentDir: "/tmp/agent",
-      }),
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:20128/v1/images/generations",
+      expect.objectContaining({ method: "POST" }),
     );
-    expect(providerHttpMocks.sanitizeConfiguredModelProviderRequest).toHaveBeenCalledWith({
-      allowPrivateNetwork: true,
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      model: "openai/gpt-image-2",
+      prompt: "a schematic city",
+      n: 4,
+      size: "1536x1024",
+      response_format: "b64_json",
     });
-    expect(providerHttpMocks.resolveProviderHttpRequestConfig).toHaveBeenCalledWith(
-      expect.objectContaining({
-        baseUrl: "http://localhost:20128/v1",
-        defaultBaseUrl: "http://localhost:20128/v1",
-        defaultHeaders: {
-          Authorization: "Bearer secret-key",
-        },
-        provider: "omniroute",
-        capability: "image",
-        transport: "http",
-      }),
-    );
-    expect(providerHttpMocks.postJsonRequest).toHaveBeenCalledWith(
-      expect.objectContaining({
-        url: "http://localhost:20128/v1/images/generations",
-        body: {
-          model: "openai/gpt-image-2",
-          prompt: "a schematic city",
-          n: 4,
-          size: "1536x1024",
-          response_format: "b64_json",
-        },
-        fetchFn: fetch,
-        allowPrivateNetwork: true,
-      }),
-    );
-    expect(providerHttpMocks.assertOkOrThrowHttpError).toHaveBeenCalledWith(
-      response,
-      "OmniRoute image generation failed",
-    );
-    expect(release).toHaveBeenCalledOnce();
     expect(result.model).toBe("openai/gpt-image-2");
     expect(result.images).toHaveLength(1);
     expect(result.images[0]).toMatchObject({
@@ -864,18 +948,12 @@ describe("omniroute provider plugin", () => {
   });
 
   it("fails clearly on empty OmniRoute image responses", async () => {
-    providerAuthRuntimeMocks.resolveApiKeyForProvider.mockResolvedValue({ apiKey: "secret-key" });
-    providerHttpMocks.resolveProviderHttpRequestConfig.mockReturnValue({
-      baseUrl: "http://localhost:20128/v1",
-      allowPrivateNetwork: undefined,
-      headers: new Headers(),
-      dispatcherPolicy: undefined,
-    });
-    providerHttpMocks.postJsonRequest.mockResolvedValue({
-      response: { ok: true } as never,
-      release: vi.fn(),
-    });
-    providerHttpMocks.readProviderJsonResponse.mockResolvedValue({ data: [] });
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
     const { buildOmniRouteImageGenerationProvider } = await import(
       "./image-generation-provider.js"
     );
@@ -886,7 +964,13 @@ describe("omniroute provider plugin", () => {
         provider: "omniroute",
         model: "openai/gpt-image-2",
         prompt: "test",
-        cfg: {} as never,
+        cfg: {
+          models: {
+            providers: {
+              omniroute: { apiKey: "secret-key" },
+            },
+          },
+        } as never,
       }),
     ).rejects.toThrow(/missing image data/);
   });

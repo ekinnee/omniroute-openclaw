@@ -1,1 +1,1 @@
-{"version":3,"file":"web-search-provider.d.ts","sourceRoot":"","sources":["../web-search-provider.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,uBAAuB,EAAE,MAAM,yCAAyC,CAAC;AAmCvF,wBAAgB,gCAAgC,IAAI,uBAAuB,CAqJ1E"}
+{"version":3,"file":"web-search-provider.d.ts","sourceRoot":"","sources":["../web-search-provider.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,iBAAiB,EAAE,MAAM,kCAAkC,CAAC;AAe1E,KAAK,uBAAuB,GAAG,UAAU,CAAC,iBAAiB,CAAC,2BAA2B,CAAC,CAAC,CAAC,CAAC,CAAC,CAAC;AAqB7F,wBAAgB,gCAAgC,IAAI,uBAAuB,CAwI1E"}

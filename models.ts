@@ -1,5 +1,23 @@
 // OmniRoute model metadata for the thin OpenAI-compatible provider wrapper.
-import type { ModelDefinitionConfig } from "openclaw/plugin-sdk/provider-model-shared";
+
+export type OmniRouteModelDefinition = {
+  id: string;
+  name: string;
+  reasoning: boolean;
+  input: Array<"text" | "image">;
+  cost: {
+    input: number;
+    output: number;
+    cacheRead: number;
+    cacheWrite: number;
+  };
+  contextWindow: number;
+  maxTokens: number;
+  compat?: {
+    supportsUsageInStreaming?: boolean;
+    supportsTools?: boolean;
+  };
+};
 
 export const OMNIROUTE_PROVIDER_ID = "omniroute";
 export const OMNIROUTE_LABEL = "OmniRoute";
@@ -9,7 +27,7 @@ export const OMNIROUTE_DEFAULT_BASE_URL = "http://localhost:20128/v1";
 export const OMNIROUTE_DEFAULT_MODEL_ID = "auto";
 export const OMNIROUTE_DEFAULT_MODEL_REF = `${OMNIROUTE_PROVIDER_ID}/${OMNIROUTE_DEFAULT_MODEL_ID}`;
 
-export function buildOmniRouteDefaultModel(): ModelDefinitionConfig {
+export function buildOmniRouteDefaultModel(): OmniRouteModelDefinition {
   return {
     id: OMNIROUTE_DEFAULT_MODEL_ID,
     name: "Auto (OmniRoute)",
