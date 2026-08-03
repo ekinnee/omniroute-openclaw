@@ -95,7 +95,11 @@ export function buildOmniRouteImageGenerationProvider() {
                 throw new Error("OmniRoute image edits and reference images are not supported yet.");
             }
             const model = requireImageModel(req.model);
-            const apiKey = await resolveOmniRouteApiKey({ cfg: req.cfg, agentDir: req.agentDir });
+            const apiKey = await resolveOmniRouteApiKey({
+                cfg: req.cfg,
+                agentDir: req.agentDir,
+                store: req.authStore,
+            });
             if (!apiKey) {
                 throw new Error("OmniRoute API key missing");
             }
@@ -126,6 +130,7 @@ export function buildOmniRouteImageGenerationProvider() {
                 },
                 timeoutMs: req.timeoutMs,
                 ssrfPolicy: http.ssrfPolicy,
+                dispatcherPolicy: http.dispatcherPolicy,
             });
             try {
                 await assertOmniRouteOk(request.response, "OmniRoute image generation failed");

@@ -1,15 +1,14 @@
 // Public-SDK-compatible OmniRoute credential resolution.
-import { isProviderAuthProfileConfigured, resolveEnvApiKey, resolveProviderAuthProfileApiKey, } from "openclaw/plugin-sdk/provider-auth";
+import { resolveApiKeyForProvider, } from "openclaw/plugin-sdk/agent-runtime";
+import { hasConfiguredSecretInput, isProviderAuthProfileConfigured, resolveEnvApiKey, } from "openclaw/plugin-sdk/provider-auth";
 import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_PROVIDER_ID, } from "./models.js";
-function readConfiguredApiKey(cfg) {
+function readConfiguredProviderCredential(cfg) {
     const provider = cfg
         ?.models?.providers?.[OMNIROUTE_PROVIDER_ID];
-    return typeof provider?.apiKey === "string" && provider.apiKey.trim()
-        ? provider.apiKey.trim()
-        : undefined;
+    return provider?.apiKey;
 }
 export function isOmniRouteConfigured(params) {
-    return Boolean(readConfiguredApiKey(params.cfg) ||
+    return Boolean(hasConfiguredSecretInput(readConfiguredProviderCredential(params.cfg)) ||
         resolveEnvApiKey(OMNIROUTE_PROVIDER_ID)?.apiKey ||
         process.env[OMNIROUTE_API_KEY_ENV_VAR] ||
         isProviderAuthProfileConfigured({
@@ -18,18 +17,12 @@ export function isOmniRouteConfigured(params) {
         }));
 }
 export async function resolveOmniRouteApiKey(params) {
-    const configured = readConfiguredApiKey(params.cfg);
-    if (configured) {
-        return configured;
-    }
-    const environment = resolveEnvApiKey(OMNIROUTE_PROVIDER_ID)?.apiKey;
-    if (environment) {
-        return environment;
-    }
-    return await resolveProviderAuthProfileApiKey({
+    const resolved = await resolveApiKeyForProvider({
         provider: OMNIROUTE_PROVIDER_ID,
         cfg: params.cfg,
         agentDir: params.agentDir,
+        store: params.store,
     });
+    return resolved.apiKey;
 }
 //# sourceMappingURL=auth.js.map

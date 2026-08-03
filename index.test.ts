@@ -7,8 +7,10 @@ import { fileURLToPath } from "node:url";
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIN_OPENCLAW_VERSION = "2026.7.1";
 const REQUIRED_OPENCLAW_SDK_EXPORTS = [
+  "./plugin-sdk/agent-runtime",
   "./plugin-sdk/plugin-entry",
   "./plugin-sdk/provider-auth",
+  "./plugin-sdk/secret-input-runtime",
   "./plugin-sdk/ssrf-runtime",
 ] as const;
 
@@ -594,10 +596,11 @@ describe("omniroute provider plugin", () => {
         buildReplayPolicy: expect.any(Function),
       }),
     );
-    expect(registerModelCatalogProvider).toHaveBeenCalledWith(
+    expect(registerModelCatalogProvider).not.toHaveBeenCalled();
+    expect(registerProvider).toHaveBeenCalledWith(
       expect.objectContaining({
-        provider: "omniroute",
-        kinds: ["text"],
+        catalog: expect.objectContaining({ run: expect.any(Function) }),
+        staticCatalog: expect.objectContaining({ run: expect.any(Function) }),
       }),
     );
     expect(registerEmbeddingProvider).toHaveBeenCalledWith(
@@ -667,6 +670,153 @@ describe("omniroute provider plugin", () => {
       input: ["hello"],
       dimensions: 4096,
     });
+  });
+
+  it("resolves provider profile credentials instead of sending profile ids", async () => {
+    const { resolveOmniRouteApiKey } = await import("./auth.js");
+    const apiKey = await resolveOmniRouteApiKey({
+      cfg: {
+        auth: {
+          profiles: {
+            "omniroute:default": { provider: "omniroute", mode: "api_key" },
+          },
+        },
+        models: {
+          providers: {
+            omniroute: { apiKey: "omniroute:default" },
+          },
+        },
+      } as never,
+      store: {
+        version: 1,
+        profiles: {
+          "omniroute:default": {
+            type: "api_key",
+            provider: "omniroute",
+            key: "resolved-secret",
+          },
+        },
+      } as never,
+    });
+
+    expect(apiKey).toBe("resolved-secret");
+  });
+
+  it("preserves configured request auth, headers, TLS, and proxy policy", async () => {
+    const { resolveOmniRouteHttpRequestConfig } = await import("./http.js");
+    const resolved = resolveOmniRouteHttpRequestConfig({
+      baseUrl: "https://gateway.example/v1",
+      defaultBaseUrl: "http://localhost:20128/v1",
+      request: {
+        headers: { "X-Trace": "trace-value" },
+        auth: {
+          mode: "header",
+          headerName: "X-Gateway-Token",
+          prefix: "Token ",
+          value: "request-secret",
+        },
+        tls: {
+          ca: "target-ca",
+          cert: "target-cert",
+          key: "target-key",
+          serverName: "gateway.example",
+          insecureSkipVerify: true,
+        },
+        proxy: {
+          mode: "explicit-proxy",
+          url: "http://proxy.example:8080",
+          tls: { ca: "proxy-ca" },
+        },
+      },
+      defaultHeaders: { Authorization: "Bearer default" },
+    });
+
+    expect(resolved.headers.get("X-Trace")).toBe("trace-value");
+    expect(resolved.headers.get("X-Gateway-Token")).toBe("Token request-secret");
+    expect(resolved.headers.get("Authorization")).toBeNull();
+    expect(resolved.dispatcherPolicy).toEqual({
+      mode: "explicit-proxy",
+      proxyUrl: "http://proxy.example:8080",
+      proxyTls: { ca: "proxy-ca" },
+    });
+  });
+
+  it("forwards per-call embedding types and text parts", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1] }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: {
+            omniroute: {
+              apiKey: "secret-key",
+              baseUrl: "http://localhost:20128/v1",
+            },
+          },
+        },
+      } as never,
+      model: "embedding-model",
+      inputType: "generic",
+      queryInputType: "query-vector",
+      documentInputType: "document-vector",
+    });
+
+    await result.provider?.embed(
+      {
+        text: "ignored fallback",
+        parts: [
+          { type: "text", text: "hello" },
+          { type: "text", text: " world" },
+        ],
+      },
+      { inputType: "query" },
+    );
+    await result.provider?.embedBatch(["document"], { inputType: "document" });
+
+    const firstBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    const secondBody = JSON.parse(String((fetchMock.mock.calls[1]?.[1] as RequestInit).body));
+    expect(firstBody).toMatchObject({ input: ["hello world"], input_type: "query-vector" });
+    expect(secondBody).toMatchObject({ input: ["document"], input_type: "document-vector" });
+  });
+
+  it("returns empty embedding batches without contacting OmniRoute", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: { omniroute: { apiKey: "secret-key" } },
+        },
+      } as never,
+      model: "embedding-model",
+    });
+
+    await expect(result.provider?.embedBatch([])).resolves.toEqual([]);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not silently fall back when an embedding SecretInput override is unresolved", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: { omniroute: { apiKey: "provider-secret" } },
+        },
+      } as never,
+      remote: {
+        apiKey: { source: "env", provider: "default", id: "OMNIROUTE_OVERRIDE_KEY" },
+      } as never,
+      model: "embedding-model",
+    });
+
+    await expect(result.provider?.embed("hello")).rejects.toThrow(/unresolved SecretRef/);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("requires an explicit OmniRoute embedding model", async () => {

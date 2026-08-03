@@ -1,3 +1,4 @@
+import { normalizeResolvedSecretInputString } from "openclaw/plugin-sdk/secret-input-runtime";
 import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
 import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
@@ -18,9 +19,10 @@ function readBaseUrl(options) {
         : OMNIROUTE_DEFAULT_BASE_URL;
 }
 function readRemoteApiKey(options) {
-    return typeof options.remote?.apiKey === "string" && options.remote.apiKey.trim()
-        ? options.remote.apiKey.trim()
-        : undefined;
+    return normalizeResolvedSecretInputString({
+        value: options.remote?.apiKey,
+        path: "agents.*.memorySearch.remote.apiKey",
+    });
 }
 function buildCacheKeyData(options) {
     const baseUrl = readBaseUrl(options);
@@ -38,10 +40,26 @@ function normalizeEmbeddingInput(input) {
     if (typeof input === "string") {
         return input;
     }
-    if (input.parts?.some((part) => part.type !== "text")) {
-        throw new Error("OmniRoute embeddings do not support inline-data input parts");
+    if (!input.parts || input.parts.length === 0) {
+        return input.text;
     }
-    return input.text;
+    const textParts = [];
+    for (const part of input.parts) {
+        if (part.type !== "text") {
+            throw new Error("OmniRoute embeddings do not support inline-data input parts");
+        }
+        textParts.push(part.text);
+    }
+    return textParts.join("");
+}
+function resolveEmbeddingInputType(options, requested) {
+    if (requested === "query") {
+        return options.queryInputType ?? options.inputType;
+    }
+    if (requested === "document") {
+        return options.documentInputType ?? options.inputType;
+    }
+    return options.inputType;
 }
 function parseEmbeddingVectors(payload, expectedCount) {
     if (!payload || typeof payload !== "object" || !Array.isArray(payload.data)) {
@@ -101,8 +119,9 @@ async function requestEmbeddings(options, inputs, callOptions) {
     if (typeof options.dimensions === "number") {
         body.dimensions = options.dimensions;
     }
-    if (options.inputType) {
-        body.input_type = options.inputType;
+    const inputType = resolveEmbeddingInputType(options, callOptions?.inputType);
+    if (inputType) {
+        body.input_type = inputType;
     }
     const request = await postOmniRouteJson({
         url: `${http.baseUrl}/embeddings`,
@@ -111,6 +130,7 @@ async function requestEmbeddings(options, inputs, callOptions) {
         signal: callOptions?.signal,
         timeoutMs: inputs.length > 1 ? 600_000 : undefined,
         ssrfPolicy: http.ssrfPolicy,
+        dispatcherPolicy: http.dispatcherPolicy,
     });
     try {
         await assertOmniRouteOk(request.response, "OmniRoute embeddings failed");
@@ -127,7 +147,12 @@ async function createOmniRouteEmbeddingProvider(options) {
         model,
         ...(typeof options.dimensions === "number" ? { dimensions: options.dimensions } : {}),
         embed: async (input, callOptions) => (await requestEmbeddings(options, [input], callOptions))[0] ?? [],
-        embedBatch: async (inputs, callOptions) => requestEmbeddings(options, inputs, callOptions),
+        embedBatch: async (inputs, callOptions) => {
+            if (inputs.length === 0) {
+                return [];
+            }
+            return await requestEmbeddings(options, inputs, callOptions);
+        },
     };
     return {
         provider,

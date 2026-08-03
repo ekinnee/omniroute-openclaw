@@ -141,6 +141,7 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
             body,
             timeoutMs: 30_000,
             ssrfPolicy: http.ssrfPolicy,
+            dispatcherPolicy: http.dispatcherPolicy,
           });
           try {
             await assertOmniRouteOk(request.response, "OmniRoute web search failed");

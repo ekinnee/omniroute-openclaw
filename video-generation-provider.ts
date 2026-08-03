@@ -91,7 +91,11 @@ export function buildOmniRouteVideoGenerationProvider(): VideoGenerationProvider
     isConfigured: ({ cfg, agentDir }) => isOmniRouteConfigured({ cfg, agentDir }),
     async generateVideo(req) {
       const model = requireVideoModel(req.model);
-      const apiKey = await resolveOmniRouteApiKey({ cfg: req.cfg, agentDir: req.agentDir });
+      const apiKey = await resolveOmniRouteApiKey({
+        cfg: req.cfg,
+        agentDir: req.agentDir,
+        store: req.authStore,
+      });
       if (!apiKey) {
         throw new Error("OmniRoute API key missing");
       }
@@ -121,6 +125,7 @@ export function buildOmniRouteVideoGenerationProvider(): VideoGenerationProvider
         },
         timeoutMs: req.timeoutMs ?? DEFAULT_TIMEOUT_MS,
         ssrfPolicy: http.ssrfPolicy,
+        dispatcherPolicy: http.dispatcherPolicy,
       });
       try {
         await assertOmniRouteOk(request.response, "OmniRoute video generation failed");

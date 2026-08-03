@@ -8,7 +8,6 @@ import { applyOmniRouteConfig } from "./onboard.js";
 import {
   OMNIROUTE_API_KEY_ENV_VAR,
   OMNIROUTE_BASE_URL_ENV_VAR,
-  OMNIROUTE_DEFAULT_MODEL_ID,
   OMNIROUTE_DEFAULT_MODEL_REF,
   OMNIROUTE_LABEL,
   OMNIROUTE_PROVIDER_ID,
@@ -16,7 +15,6 @@ import {
 import { omniRouteEmbeddingProviderAdapter } from "./embedding-provider.js";
 import { buildOmniRouteImageGenerationProvider } from "./image-generation-provider.js";
 import {
-  buildLiveOmniRouteProvider,
   buildOmniRouteCatalog,
 } from "./provider-catalog.js";
 import { createOmniRouteWebSearchProvider } from "./web-search-provider.js";
@@ -70,30 +68,6 @@ const plugin: OpenClawPluginDefinition = definePluginEntry({
       },
       buildReplayPolicy: buildOmniRouteReplayPolicy,
       isModernModelRef: () => true,
-    });
-
-    api.registerModelCatalogProvider({
-      provider: OMNIROUTE_PROVIDER_ID,
-      kinds: ["text"],
-      staticCatalog: () => [
-        {
-          kind: "text",
-          provider: OMNIROUTE_PROVIDER_ID,
-          model: OMNIROUTE_DEFAULT_MODEL_ID,
-          label: "Auto (OmniRoute)",
-          source: "manifest",
-        },
-      ],
-      liveCatalog: async (ctx) => {
-        const provider = await buildLiveOmniRouteProvider(ctx);
-        return provider.models.map((model) => ({
-          kind: "text" as const,
-          provider: OMNIROUTE_PROVIDER_ID,
-          model: model.id,
-          ...(model.name ? { label: model.name } : {}),
-          source: "live" as const,
-        }));
-      },
     });
 
     api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);
