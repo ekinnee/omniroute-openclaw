@@ -107,6 +107,9 @@ async function requestEmbeddings(options, inputs, callOptions) {
     });
     const headers = new Headers(http.headers);
     for (const [key, value] of Object.entries(options.remote?.headers ?? {})) {
+        if (key.trim().toLowerCase() === "authorization") {
+            continue;
+        }
         headers.set(key, value);
     }
     if (!headers.has("Content-Type")) {

@@ -9,7 +9,11 @@ function getCachedLiveCatalogValue(params) {
     }
     const value = params.load();
     liveCatalogCache.set(params.key, { expiresAt: now + LIVE_CATALOG_TTL_MS, value });
-    void value.catch(() => liveCatalogCache.delete(params.key));
+    void value.then((resolved) => {
+        if (params.shouldCache && !params.shouldCache(resolved)) {
+            liveCatalogCache.delete(params.key);
+        }
+    }, () => liveCatalogCache.delete(params.key));
     return value;
 }
 export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL) {
@@ -246,6 +250,7 @@ export async function buildLiveOmniRouteProvider(ctx) {
                     baseUrl,
                     apiKey,
                 }),
+                shouldCache: (models) => models.length > 0,
             }),
         };
     }

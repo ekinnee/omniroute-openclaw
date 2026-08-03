@@ -76,7 +76,7 @@ function readTls(value: unknown, path: string): Record<string, unknown> | undefi
     tls.servername = raw.serverName.trim();
   }
   if (raw.insecureSkipVerify === true) {
-    tls.rejectUnauthorized = false;
+    throw new Error("Provider transport overrides do not allow insecureSkipVerify");
   } else if (raw.insecureSkipVerify === false) {
     tls.rejectUnauthorized = true;
   }
@@ -158,7 +158,9 @@ export function resolveOmniRouteHttpRequestConfig(params: {
     baseUrl,
     headers,
     ssrfPolicy: mergeSsrFPolicies(
-      ssrfPolicyFromHttpBaseUrlAllowedHostname(baseUrl),
+      request?.allowPrivateNetwork === false
+        ? undefined
+        : ssrfPolicyFromHttpBaseUrlAllowedHostname(baseUrl),
       ssrfPolicyFromPrivateNetworkOptIn(
         request?.allowPrivateNetwork === true ? true : undefined,
       ),
