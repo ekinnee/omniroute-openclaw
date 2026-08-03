@@ -505,6 +505,30 @@ describe("omniroute provider plugin", () => {
     expect(catalog.models.map((model) => model.id)).toEqual(["auto"]);
   });
 
+  it("does not cache an empty live catalog", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [] }),
+      } as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ id: "recovered-model", type: "chat" }] }),
+      } as never);
+    const context = mockCatalogContext({
+      baseUrl: "http://empty-catalog-cache.example/v1",
+      apiKey: "secret-key",
+    });
+
+    await expect(buildLiveOmniRouteProvider(context)).resolves.toMatchObject({ models: [] });
+    await expect(buildLiveOmniRouteProvider(context)).resolves.toMatchObject({
+      models: [{ id: "recovered-model" }],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it("uses OMNIROUTE_BASE_URL when no config base URL is set", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
@@ -562,6 +586,25 @@ describe("omniroute provider plugin", () => {
     const { applyOmniRouteConfig } = await import("./onboard.js");
     const config = applyOmniRouteConfig({} as never);
     expect(config).toBeDefined();
+  });
+
+  it("preserves an existing primary model during onboarding", async () => {
+    const { applyOmniRouteConfig } = await import("./onboard.js");
+    const config = applyOmniRouteConfig({
+      agents: {
+        defaults: {
+          model: {
+            primary: "openai/gpt-5",
+            fallbacks: ["openai/gpt-4.1"],
+          },
+        },
+      },
+    } as never);
+
+    expect(config.agents?.defaults?.model).toEqual({
+      primary: "openai/gpt-5",
+      fallbacks: ["openai/gpt-4.1"],
+    });
   });
 
   it("has a valid plugin entry", async () => {
@@ -672,6 +715,35 @@ describe("omniroute provider plugin", () => {
     });
   });
 
+  it("keeps the resolved embedding credential ahead of remote headers", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1, 0.2] }] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: {
+            omniroute: { apiKey: "resolved-key" },
+          },
+        },
+      } as never,
+      remote: {
+        apiKey: "resolved-key",
+        headers: { Authorization: "Bearer ignored" },
+      },
+      model: "embedding-model",
+    });
+
+    await result.provider?.embed("hello");
+
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(new Headers(requestInit.headers).get("Authorization")).toBe("Bearer resolved-key");
+  });
+
   it("resolves provider profile credentials instead of sending profile ids", async () => {
     const { resolveOmniRouteApiKey } = await import("./auth.js");
     const apiKey = await resolveOmniRouteApiKey({
@@ -720,7 +792,7 @@ describe("omniroute provider plugin", () => {
           cert: "target-cert",
           key: "target-key",
           serverName: "gateway.example",
-          insecureSkipVerify: true,
+          insecureSkipVerify: false,
         },
         proxy: {
           mode: "explicit-proxy",
@@ -739,6 +811,30 @@ describe("omniroute provider plugin", () => {
       proxyUrl: "http://proxy.example:8080",
       proxyTls: { ca: "proxy-ca" },
     });
+  });
+
+  it("rejects insecure TLS overrides", async () => {
+    const { resolveOmniRouteHttpRequestConfig } = await import("./http.js");
+
+    expect(() =>
+      resolveOmniRouteHttpRequestConfig({
+        baseUrl: "https://gateway.example/v1",
+        defaultBaseUrl: "http://localhost:20128/v1",
+        request: { tls: { insecureSkipVerify: true } },
+      }),
+    ).toThrow("Provider transport overrides do not allow insecureSkipVerify");
+  });
+
+  it("honors explicit private-network denial for the configured base URL", async () => {
+    const { resolveOmniRouteHttpRequestConfig } = await import("./http.js");
+    const resolved = resolveOmniRouteHttpRequestConfig({
+      baseUrl: "http://10.0.0.5:1234/v1",
+      defaultBaseUrl: "http://localhost:20128/v1",
+      request: { allowPrivateNetwork: false },
+    });
+
+    expect(resolved.ssrfPolicy?.allowedHostnames).toBeUndefined();
+    expect(resolved.ssrfPolicy?.allowPrivateNetwork).toBeUndefined();
   });
 
   it("forwards per-call embedding types and text parts", async () => {

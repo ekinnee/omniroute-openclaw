@@ -28,6 +28,7 @@ const LIVE_CATALOG_TTL_MS = 30_000;
 function getCachedLiveCatalogValue(params: {
   key: string;
   load: () => Promise<OmniRouteModelDefinition[]>;
+  shouldCache?: (value: OmniRouteModelDefinition[]) => boolean;
 }): Promise<OmniRouteModelDefinition[]> {
   const now = Date.now();
   const existing = liveCatalogCache.get(params.key);
@@ -36,7 +37,14 @@ function getCachedLiveCatalogValue(params: {
   }
   const value = params.load();
   liveCatalogCache.set(params.key, { expiresAt: now + LIVE_CATALOG_TTL_MS, value });
-  void value.catch(() => liveCatalogCache.delete(params.key));
+  void value.then(
+    (resolved) => {
+      if (params.shouldCache && !params.shouldCache(resolved)) {
+        liveCatalogCache.delete(params.key);
+      }
+    },
+    () => liveCatalogCache.delete(params.key),
+  );
   return value;
 }
 
@@ -382,6 +390,7 @@ export async function buildLiveOmniRouteProvider(
             baseUrl,
             apiKey,
           }),
+        shouldCache: (models) => models.length > 0,
       }),
     };
   } catch (err) {

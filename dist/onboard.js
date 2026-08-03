@@ -42,6 +42,13 @@ export function applyOmniRouteProviderConfig(cfg) {
 export function applyOmniRouteConfig(cfg) {
     const next = applyOmniRouteProviderConfig(cfg);
     const currentModel = next.agents?.defaults?.model;
+    const primary = typeof currentModel === "string"
+        ? currentModel
+        : currentModel && typeof currentModel === "object" && "primary" in currentModel
+            ? typeof currentModel.primary === "string"
+                ? currentModel.primary
+                : undefined
+            : undefined;
     const fallbacks = currentModel && typeof currentModel === "object" && "fallbacks" in currentModel
         ? currentModel.fallbacks
         : undefined;
@@ -53,7 +60,7 @@ export function applyOmniRouteConfig(cfg) {
                 ...next.agents?.defaults,
                 model: {
                     ...(Array.isArray(fallbacks) ? { fallbacks } : {}),
-                    primary: OMNIROUTE_DEFAULT_MODEL_REF,
+                    primary: primary ?? OMNIROUTE_DEFAULT_MODEL_REF,
                 },
             },
         },
