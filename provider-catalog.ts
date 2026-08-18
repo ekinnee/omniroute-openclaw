@@ -1,11 +1,10 @@
+import { createHash } from "node:crypto";
 import type {
   ProviderCatalogContext,
   ProviderCatalogResult,
 } from "openclaw/plugin-sdk/plugin-entry";
 import {
   OMNIROUTE_BASE_URL_ENV_VAR,
-  OMNIROUTE_DEFAULT_MODEL_ID,
-  buildOmniRouteDefaultModel,
   type OmniRouteModelDefinition,
   OMNIROUTE_DEFAULT_BASE_URL,
 } from "./models.js";
@@ -25,35 +24,46 @@ type LiveCatalogCacheEntry = {
 const liveCatalogCache = new Map<string, LiveCatalogCacheEntry>();
 const LIVE_CATALOG_TTL_MS = 30_000;
 
+function deleteLiveCatalogCacheEntryIfCurrent(
+  key: string,
+  entry: LiveCatalogCacheEntry,
+): void {
+  if (liveCatalogCache.get(key) === entry) {
+    liveCatalogCache.delete(key);
+  }
+}
+
+function pruneExpiredLiveCatalogCacheEntries(now: number): void {
+  for (const [key, entry] of liveCatalogCache) {
+    if (entry.expiresAt <= now) {
+      deleteLiveCatalogCacheEntryIfCurrent(key, entry);
+    }
+  }
+}
+
 function getCachedLiveCatalogValue(params: {
   key: string;
   load: () => Promise<OmniRouteModelDefinition[]>;
   shouldCache?: (value: OmniRouteModelDefinition[]) => boolean;
 }): Promise<OmniRouteModelDefinition[]> {
   const now = Date.now();
+  pruneExpiredLiveCatalogCacheEntries(now);
   const existing = liveCatalogCache.get(params.key);
   if (existing && existing.expiresAt > now) {
     return existing.value;
   }
   const value = params.load();
-  liveCatalogCache.set(params.key, { expiresAt: now + LIVE_CATALOG_TTL_MS, value });
+  const entry = { expiresAt: now + LIVE_CATALOG_TTL_MS, value };
+  liveCatalogCache.set(params.key, entry);
   void value.then(
     (resolved) => {
       if (params.shouldCache && !params.shouldCache(resolved)) {
-        liveCatalogCache.delete(params.key);
+        deleteLiveCatalogCacheEntryIfCurrent(params.key, entry);
       }
     },
-    () => liveCatalogCache.delete(params.key),
+    () => deleteLiveCatalogCacheEntryIfCurrent(params.key, entry),
   );
   return value;
-}
-
-export function buildOmniRouteProvider(baseUrl = OMNIROUTE_DEFAULT_BASE_URL): OmniRouteProviderConfig {
-  return {
-    baseUrl: normalizeBaseUrl(baseUrl),
-    api: "openai-completions",
-    models: [buildOmniRouteDefaultModel()],
-  };
 }
 
 type OmniRouteModelListResponse = {
@@ -95,6 +105,21 @@ const NON_CHAT_MODEL_TYPES = new Set([
 const CHAT_ENDPOINTS = new Set(["chat", "chat-completions", "chat_completions"]);
 const EMBEDDING_ENDPOINTS = new Set(["embedding", "embeddings"]);
 const IMAGE_ENDPOINTS = new Set(["image", "images", "image-generation", "image_generation"]);
+const OMNIROUTE_CANONICAL_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const;
+const OPENCLAW_THINKING_LEVELS = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+const SUPPORTED_EFFORT_VALUES = new Set<string>([
+  ...OMNIROUTE_CANONICAL_EFFORTS,
+  "minimal",
+  "max",
+]);
 
 export type OmniRouteEmbeddingModel = {
   id: string;
@@ -146,6 +171,65 @@ function hasCapability(entry: OmniRouteModelEntry, key: string): boolean {
     return false;
   }
   return entry.capabilities[key] === true;
+}
+
+function readCapabilityBoolean(
+  entry: OmniRouteModelEntry,
+  key: string,
+): boolean | undefined {
+  if (!isRecord(entry.capabilities)) {
+    return undefined;
+  }
+  const value = entry.capabilities[key];
+  return typeof value === "boolean" ? value : undefined;
+}
+
+function normalizeReasoningEfforts(value: unknown): string[] {
+  const efforts = normalizeStringArray(value);
+  return [...new Set(efforts.filter((effort) => SUPPORTED_EFFORT_VALUES.has(effort)))];
+}
+
+function resolveReasoningCapabilities(entry: OmniRouteModelEntry): {
+  reasoning: boolean;
+  supportedEfforts: string[];
+} {
+  const explicitThinking =
+    readCapabilityBoolean(entry, "supportsThinking") ??
+    readCapabilityBoolean(entry, "thinking");
+  const explicitEfforts = isRecord(entry.capabilities)
+    ? normalizeReasoningEfforts(entry.capabilities.effort_tiers)
+    : [];
+  const controllable =
+    explicitThinking === false ? false : explicitThinking === true || explicitEfforts.length > 0;
+  const supportedEfforts = controllable
+    ? explicitEfforts.length > 0
+      ? explicitEfforts
+      : [...OMNIROUTE_CANONICAL_EFFORTS]
+    : [];
+  return {
+    reasoning: hasCapability(entry, "reasoning") || controllable,
+    supportedEfforts,
+  };
+}
+
+function buildThinkingLevelMap(
+  supportedEfforts: readonly string[],
+): OmniRouteModelDefinition["thinkingLevelMap"] {
+  const efforts = new Set(supportedEfforts);
+  // OpenClaw exposes several reasoning levels by default for reasoning models.
+  // Explicit nulls keep the selector limited to capabilities OmniRoute actually advertised.
+  return Object.fromEntries(
+    OPENCLAW_THINKING_LEVELS.map((level) => {
+      const providerEffort = level === "off" ? "none" : level;
+      return [level, efforts.has(providerEffort) ? providerEffort : null];
+    }),
+  ) as NonNullable<OmniRouteModelDefinition["thinkingLevelMap"]>;
+}
+
+function fingerprintCredential(apiKey: string | undefined): string {
+  return apiKey
+    ? createHash("sha256").update(apiKey).digest("hex")
+    : "none";
 }
 
 function normalizeStringArray(value: unknown): string[] {
@@ -233,20 +317,32 @@ function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry) {
     return null;
   }
 
+  const reasoningCapabilities = resolveReasoningCapabilities(entry);
+  const hasReasoningControls = reasoningCapabilities.supportedEfforts.length > 0;
+
   return {
     id,
     name:
       (typeof entry.name === "string" && entry.name.trim()) ||
       (typeof entry.root === "string" && entry.root.trim()) ||
       id,
-    reasoning: hasCapability(entry, "reasoning") || hasCapability(entry, "thinking") || id === OMNIROUTE_DEFAULT_MODEL_ID,
+    reasoning: reasoningCapabilities.reasoning,
     input: normalizeInputModalities(entry),
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
     contextWindow:
       readPositiveNumber(entry.context_length, entry.max_input_tokens, entry.contextWindow) ??
       128_000,
     maxTokens: readPositiveNumber(entry.max_output_tokens, entry.maxOutputTokens) ?? 16_384,
+    ...(reasoningCapabilities.reasoning
+      ? { thinkingLevelMap: buildThinkingLevelMap(reasoningCapabilities.supportedEfforts) }
+      : {}),
     compat: {
+      ...(hasReasoningControls
+        ? {
+            supportsReasoningEffort: true,
+            supportedReasoningEfforts: reasoningCapabilities.supportedEfforts,
+          }
+        : {}),
       supportsUsageInStreaming: true,
       supportsTools: hasCapability(entry, "tool_calling") || undefined,
     },
@@ -367,67 +463,68 @@ export async function fetchOmniRouteImageModels(params: {
 
 export async function buildLiveOmniRouteProvider(
   ctx: ProviderCatalogContext,
-): Promise<OmniRouteProviderConfig> {
+): Promise<OmniRouteProviderConfig | null> {
   const baseUrl = resolveConfiguredBaseUrl(ctx);
   const auth = ctx.resolveProviderAuth("omniroute");
-  const apiKey = auth.discoveryApiKey ?? auth.apiKey;
+  const runtimeApiKey = auth.apiKey;
+  const discoveryApiKey = auth.discoveryApiKey ?? runtimeApiKey;
+  if (!runtimeApiKey || !discoveryApiKey) {
+    return null;
+  }
 
   try {
+    const models = await getCachedLiveCatalogValue({
+      key: JSON.stringify([
+        "omniroute",
+        "chat-models",
+        baseUrl,
+        auth.mode,
+        auth.source,
+        auth.profileId ?? "none",
+        fingerprintCredential(discoveryApiKey),
+      ]),
+      load: () =>
+        fetchOmniRouteChatModels({
+          baseUrl,
+          apiKey: discoveryApiKey,
+        }),
+      shouldCache: (resolved) => resolved.length > 0,
+    });
+    if (models.length === 0) {
+      return null;
+    }
     return {
       baseUrl,
       api: "openai-completions",
-      models: await getCachedLiveCatalogValue({
-        key: JSON.stringify([
-          "omniroute",
-          "chat-models",
-          baseUrl,
-          auth.mode,
-          auth.source,
-          Boolean(apiKey),
-        ]),
-        load: () =>
-          fetchOmniRouteChatModels({
-            baseUrl,
-            apiKey,
-          }),
-        shouldCache: (models) => models.length > 0,
-      }),
+      apiKey: runtimeApiKey,
+      models,
     };
   } catch (err) {
     console.warn(
-      `[omniroute] Live model discovery failed, falling back to static catalog (${baseUrl}): ${
+      `[omniroute] Live model discovery failed (${baseUrl}): ${
         err instanceof Error ? err.message : String(err)
       }`,
     );
-    return {
-      ...buildOmniRouteProvider(baseUrl),
-      baseUrl,
-    };
+    return null;
   }
 }
 
 export async function buildOmniRouteCatalog(
   ctx: ProviderCatalogContext,
-  live: boolean,
 ): Promise<ProviderCatalogResult> {
-  const apiKey = ctx.resolveProviderApiKey("omniroute").apiKey;
-  if (!apiKey) {
-    return null;
-  }
-
   const configuredProvider = ctx.config.models?.providers?.omniroute;
   const configuredBaseUrl =
     typeof configuredProvider?.baseUrl === "string" && configuredProvider.baseUrl.trim()
       ? configuredProvider.baseUrl.trim().replace(/\/+$/, "")
       : undefined;
-  const provider = live
-    ? await buildLiveOmniRouteProvider(ctx)
-    : buildOmniRouteProvider(configuredBaseUrl ?? resolveConfiguredBaseUrl(ctx));
+  const provider = await buildLiveOmniRouteProvider(ctx);
+  if (!provider) {
+    return null;
+  }
   return {
     provider: {
       ...provider,
       ...(configuredBaseUrl ? { baseUrl: configuredBaseUrl } : {}),
-      apiKey,
     },
   };
 }

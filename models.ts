@@ -13,7 +13,12 @@ export type OmniRouteModelDefinition = {
   };
   contextWindow: number;
   maxTokens: number;
+  thinkingLevelMap?: Partial<
+    Record<"off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", string | null>
+  >;
   compat?: {
+    supportsReasoningEffort?: boolean;
+    supportedReasoningEfforts?: string[];
     supportsUsageInStreaming?: boolean;
     supportsTools?: boolean;
   };
@@ -24,20 +29,3 @@ export const OMNIROUTE_LABEL = "OmniRoute";
 export const OMNIROUTE_API_KEY_ENV_VAR = "OMNIROUTE_API_KEY";
 export const OMNIROUTE_BASE_URL_ENV_VAR = "OMNIROUTE_BASE_URL";
 export const OMNIROUTE_DEFAULT_BASE_URL = "http://localhost:20128/v1";
-export const OMNIROUTE_DEFAULT_MODEL_ID = "auto";
-export const OMNIROUTE_DEFAULT_MODEL_REF = `${OMNIROUTE_PROVIDER_ID}/${OMNIROUTE_DEFAULT_MODEL_ID}`;
-
-export function buildOmniRouteDefaultModel(): OmniRouteModelDefinition {
-  return {
-    id: OMNIROUTE_DEFAULT_MODEL_ID,
-    name: "Auto (OmniRoute)",
-    reasoning: true,
-    input: ["text", "image"],
-    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow: 128_000,
-    maxTokens: 16_384,
-    compat: {
-      supportsUsageInStreaming: true,
-    },
-  };
-}

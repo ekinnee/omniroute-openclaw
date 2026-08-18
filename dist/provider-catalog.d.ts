@@ -6,7 +6,6 @@ type OmniRouteProviderConfig = {
     models: OmniRouteModelDefinition[];
     apiKey?: string;
 };
-export declare function buildOmniRouteProvider(baseUrl?: string): OmniRouteProviderConfig;
 type OmniRouteModelEntry = {
     id?: unknown;
     name?: unknown;
@@ -55,7 +54,7 @@ export declare function fetchOmniRouteImageModels(params: {
     apiKey?: string;
     signal?: AbortSignal;
 }): Promise<OmniRouteImageModel[]>;
-export declare function buildLiveOmniRouteProvider(ctx: ProviderCatalogContext): Promise<OmniRouteProviderConfig>;
-export declare function buildOmniRouteCatalog(ctx: ProviderCatalogContext, live: boolean): Promise<ProviderCatalogResult>;
+export declare function buildLiveOmniRouteProvider(ctx: ProviderCatalogContext): Promise<OmniRouteProviderConfig | null>;
+export declare function buildOmniRouteCatalog(ctx: ProviderCatalogContext): Promise<ProviderCatalogResult>;
 export {};
 //# sourceMappingURL=provider-catalog.d.ts.map

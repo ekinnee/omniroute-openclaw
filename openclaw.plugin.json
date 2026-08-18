@@ -61,31 +61,6 @@
     }
   ],
   "modelCatalog": {
-    "providers": {
-      "omniroute": {
-        "baseUrl": "http://localhost:20128/v1",
-        "api": "openai-completions",
-        "models": [
-          {
-            "id": "auto",
-            "name": "Auto (OmniRoute)",
-            "reasoning": true,
-            "input": ["text", "image"],
-            "contextWindow": 128000,
-            "maxTokens": 16384,
-            "cost": {
-              "input": 0,
-              "output": 0,
-              "cacheRead": 0,
-              "cacheWrite": 0
-            },
-            "compat": {
-              "supportsUsageInStreaming": true
-            }
-          }
-        ]
-      }
-    },
     "discovery": {
       "omniroute": "runtime"
     }

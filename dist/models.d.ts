@@ -11,7 +11,10 @@ export type OmniRouteModelDefinition = {
     };
     contextWindow: number;
     maxTokens: number;
+    thinkingLevelMap?: Partial<Record<"off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", string | null>>;
     compat?: {
+        supportsReasoningEffort?: boolean;
+        supportedReasoningEfforts?: string[];
         supportsUsageInStreaming?: boolean;
         supportsTools?: boolean;
     };
@@ -21,7 +24,4 @@ export declare const OMNIROUTE_LABEL = "OmniRoute";
 export declare const OMNIROUTE_API_KEY_ENV_VAR = "OMNIROUTE_API_KEY";
 export declare const OMNIROUTE_BASE_URL_ENV_VAR = "OMNIROUTE_BASE_URL";
 export declare const OMNIROUTE_DEFAULT_BASE_URL = "http://localhost:20128/v1";
-export declare const OMNIROUTE_DEFAULT_MODEL_ID = "auto";
-export declare const OMNIROUTE_DEFAULT_MODEL_REF = "omniroute/auto";
-export declare function buildOmniRouteDefaultModel(): OmniRouteModelDefinition;
 //# sourceMappingURL=models.d.ts.map
