@@ -17,6 +17,9 @@
     "models.ts",
     "onboard.ts",
     "provider-catalog.ts",
+    "catalog-audit.ts",
+    "catalog-audit-cli.ts",
+    "catalog-audit-bin.ts",
     "embedding-provider.ts",
     "image-generation-provider.ts"
   ]

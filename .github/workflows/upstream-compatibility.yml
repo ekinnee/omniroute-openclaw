@@ -1,0 +1,84 @@
+name: Upstream Compatibility
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/upstream-compatibility.yml"
+      - "*.ts"
+      - "dist/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "tsconfig.json"
+  schedule:
+    - cron: "17 9 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: upstream-compatibility-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  openclaw-beta:
+    name: OpenClaw beta package
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24.15.0
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm build
+      - name: Pack the plugin
+        run: |
+          mkdir -p /tmp/omniroute-openclaw-package
+          npm pack --cache /tmp/omniroute-openclaw-npm-cache --pack-destination /tmp/omniroute-openclaw-package
+      - name: Load the packaged plugin with the latest OpenClaw beta
+        run: |
+          mkdir -p /tmp/omniroute-openclaw-compat
+          cd /tmp/omniroute-openclaw-compat
+          npm init --yes
+          # npm ranges intentionally exclude prereleases, so install the newer beta
+          # explicitly rather than treating it as a supported stable peer release.
+          npm install --cache /tmp/omniroute-openclaw-npm-cache --ignore-scripts --legacy-peer-deps --no-save openclaw@beta /tmp/omniroute-openclaw-package/*.tgz
+          ./node_modules/.bin/omniroute-catalog-audit --help | grep -F "Usage: omniroute-catalog-audit"
+          node --input-type=module <<'NODE'
+          import plugin from "@ekinnee/omniroute-provider/dist/index.js";
+
+          const registered = {
+            provider: 0,
+            embedding: 0,
+            image: 0,
+            video: 0,
+            webSearch: 0,
+          };
+          const providers = [];
+
+          plugin.register({
+            registerProvider: (provider) => {
+              registered.provider++;
+              providers.push(provider);
+            },
+            registerEmbeddingProvider: () => registered.embedding++,
+            registerImageGenerationProvider: () => registered.image++,
+            registerVideoGenerationProvider: () => registered.video++,
+            registerWebSearchProvider: () => registered.webSearch++,
+          });
+
+          for (const [capability, count] of Object.entries(registered)) {
+            if (count !== 1) {
+              throw new Error(`Expected exactly one ${capability} registration, got ${count}`);
+            }
+          }
+          if (providers[0]?.id !== "omniroute") {
+            throw new Error(`Expected provider id omniroute, got ${providers[0]?.id}`);
+          }
+          if (typeof providers[0]?.catalog?.run !== "function") {
+            throw new Error("Expected the OmniRoute provider to register catalog.run");
+          }
+          NODE

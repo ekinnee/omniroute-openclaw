@@ -11,6 +11,7 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Auth: API key through `OMNIROUTE_API_KEY`
 - Text model API: `openai-completions`
 - Live chat model discovery: `GET /v1/models`
+- Read-only catalog metadata audit: `omniroute-catalog-audit`
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 - Image generation provider: `omniroute`, backed by `POST /v1/images/generations`
 - Current plugin version: `2.0.0`
@@ -19,6 +20,8 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 The text provider uses OmniRoute's authenticated live model catalog and filters the response to chat-capable rows. `GET /v1/models` is authoritative: preserve its IDs exactly, do not hardcode `auto` or any other combo/default, and do not synthesize a static fallback when discovery is unavailable. The catalog can differ by gateway upstream-provider configuration and API-key permissions. Embeddings and image generation require explicit models from OmniRoute's catalog and likewise never synthesize `auto`.
 
 Reasoning controls are projected only from returned capability metadata. OpenClaw's off state maps to `reasoning_effort: "none"`; supported non-off levels pass through using the returned effort metadata. OpenClaw continues to own the configured/session default when no level is explicitly selected. Temperature suppression and arbitrary provider-specific flags remain future transport-level work, rather than catalog metadata passed through by this plugin.
+
+The packaged catalog audit reads the same OpenClaw config, agent-scoped credentials, base URL, and request transport overrides as the plugin. It reports relevant metadata omissions without inventing replacements and never mutates configuration. This provides a plugin-owned way to distinguish an OmniRoute catalog gap from a downstream OpenClaw projection gap.
 
 ## Target Capability Map
 
@@ -47,22 +50,23 @@ Reasoning controls are projected only from returned capability metadata. OpenCla
 ### Plugin-side (OpenClaw SDK surface exists)
 
 1. Keep live catalog handling aligned with OmniRoute's authenticated `GET /v1/models` response: preserve IDs exactly, include untyped chat/combo/provider rows, honor `supported_endpoints`, avoid synthesizing models, and scope cached discovery to the effective credential and auth profile.
-2. Project reasoning controls only from returned capability metadata. Normalize supported effort tiers conservatively; map an explicit off selection to `reasoning_effort: "none"`; do not infer temperature support or arbitrary provider-specific flags.
-3. Keep embedding model handling explicit: filter `GET /v1/models` to embedding-capable rows, preserve ids exactly, include dimensionality in runtime/cache identity when OpenClaw provides it, and fail clearly when no embedding model is configured.
-4. Keep image generation explicit and generation-only for the first cut: filter `GET /v1/models` to image-capable rows, preserve ids exactly, pass size/count through to `/v1/images/generations`, and reject reference images until edits are implemented.
-5. ~~Add web search support~~ ✅ Done: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
-6. Add image edits: extend the existing `ImageGenerationProvider` to support the `edit` capability, mapping to OmniRoute's `/v1/images/edits`.
-7. Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.
-8. Add transcription (STT): register via `registerRealtimeTranscriptionProvider`, mapping to OmniRoute's `POST /v1/audio/transcriptions`.
-9. ~~Add video generation~~ ✅ Done: register via `registerVideoGenerationProvider`, mapping to OmniRoute's `POST /v1/videos/generations`.
-10. Add music generation: register via `registerMusicGenerationProvider`, mapping to OmniRoute's `POST /v1/music/generations`.
+2. Keep the packaged catalog audit aligned with discovery semantics so it exposes advertised fields, invalid rows, duplicate IDs, and relevant metadata gaps without defaults or credentials.
+3. Project reasoning controls only from returned capability metadata. Normalize supported effort tiers conservatively; map an explicit off selection to `reasoning_effort: "none"`; do not infer temperature support or arbitrary provider-specific flags.
+4. Keep embedding model handling explicit: filter `GET /v1/models` to embedding-capable rows, preserve ids exactly, include dimensionality in runtime/cache identity when OpenClaw provides it, and fail clearly when no embedding model is configured.
+5. Keep image generation explicit and generation-only for the first cut: filter `GET /v1/models` to image-capable rows, preserve ids exactly, pass size/count through to `/v1/images/generations`, and reject reference images until edits are implemented.
+6. ~~Add web search support~~ ✅ Done: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
+7. Add image edits: extend the existing `ImageGenerationProvider` to support the `edit` capability, mapping to OmniRoute's `/v1/images/edits`.
+8. Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.
+9. Add transcription (STT): register via `registerRealtimeTranscriptionProvider`, mapping to OmniRoute's `POST /v1/audio/transcriptions`.
+10. ~~Add video generation~~ ✅ Done: register via `registerVideoGenerationProvider`, mapping to OmniRoute's `POST /v1/videos/generations`.
+11. Add music generation: register via `registerMusicGenerationProvider`, mapping to OmniRoute's `POST /v1/music/generations`.
 
 ### Upstream OpenClaw PRs needed (no plugin surface yet)
 
-10. Propose `registerRerankProvider` SDK surface for `/v1/rerank`.
-11. Propose `registerModerationProvider` SDK surface for `/v1/moderations`.
-12. Propose file/batch provider surfaces for `/v1/files` and `/v1/batches`.
-13. Propose Responses API, completions, and messages provider surfaces for `/v1/responses`, `/v1/completions`, `/v1/messages`.
+1. Propose `registerRerankProvider` SDK surface for `/v1/rerank`.
+2. Propose `registerModerationProvider` SDK surface for `/v1/moderations`.
+3. Propose file/batch provider surfaces for `/v1/files` and `/v1/batches`.
+4. Propose Responses API, completions, and messages provider surfaces for `/v1/responses`, `/v1/completions`, `/v1/messages`.
 
 ## Compatibility Notes
 
