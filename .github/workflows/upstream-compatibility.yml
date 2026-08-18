@@ -1,6 +1,14 @@
 name: Upstream Compatibility
 
 on:
+  pull_request:
+    paths:
+      - ".github/workflows/upstream-compatibility.yml"
+      - "*.ts"
+      - "dist/**"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "tsconfig.json"
   schedule:
     - cron: "17 9 * * 1"
   workflow_dispatch:
