@@ -1,8 +1,39 @@
 // OmniRoute's provider-local compatibility hooks.
 import type {
+  ProviderDefaultThinkingPolicyContext,
   ProviderReplayPolicy,
   ProviderReplayPolicyContext,
+  ProviderThinkingProfile,
 } from "openclaw/plugin-sdk/plugin-entry";
+
+const OMNIROUTE_PROFILE_LEVELS = [
+  "off",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+
+/** Limit OpenClaw's selector to the exact effort levels advertised by OmniRoute. */
+export function buildOmniRouteThinkingProfile(
+  ctx: ProviderDefaultThinkingPolicyContext,
+): ProviderThinkingProfile {
+  const advertised = new Set(
+    (ctx.compat?.supportedReasoningEfforts ?? [])
+      .filter((effort): effort is string => typeof effort === "string")
+      .map((effort) => effort.trim().toLowerCase())
+      .map((effort) => (effort === "none" ? "off" : effort)),
+  );
+  const levels = OMNIROUTE_PROFILE_LEVELS.filter((level) => advertised.has(level)).map(
+    (id) => ({ id }),
+  );
+  if (levels.length === 0) {
+    return { levels: [{ id: "off" }], defaultLevel: "off" };
+  }
+  return { levels };
+}
 
 /**
  * Preserve the OpenAI-compatible transcript policy that the legacy SDK helper

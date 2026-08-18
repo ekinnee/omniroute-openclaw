@@ -1,8 +1,8 @@
 // OmniRoute provider plugin tests — standalone compatible
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readFileSync, existsSync } from "node:fs";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { resolve, dirname, join } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIN_OPENCLAW_VERSION = "2026.7.1";
@@ -14,7 +14,17 @@ const REQUIRED_OPENCLAW_SDK_EXPORTS = [
   "./plugin-sdk/ssrf-runtime",
 ] as const;
 
-function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string; envBaseUrl?: string }) {
+function mockCatalogContext(overrides?: {
+  baseUrl?: string;
+  apiKey?: string;
+  discoveryApiKey?: string;
+  envBaseUrl?: string;
+  authMode?: string;
+  authSource?: string;
+  profileId?: string;
+}) {
+  const apiKey = overrides?.apiKey;
+  const discoveryApiKey = overrides?.discoveryApiKey ?? apiKey;
   return {
     config: {
       models: {
@@ -28,12 +38,13 @@ function mockCatalogContext(overrides?: { baseUrl?: string; apiKey?: string; env
     env: {
       OMNIROUTE_BASE_URL: overrides?.envBaseUrl,
     },
-    resolveProviderApiKey: () => ({ apiKey: overrides?.apiKey }),
+    resolveProviderApiKey: () => ({ apiKey }),
     resolveProviderAuth: () => ({
-      apiKey: overrides?.apiKey,
-      discoveryApiKey: overrides?.apiKey,
-      mode: "api_key",
-      source: overrides?.apiKey ? "env" : "none",
+      apiKey,
+      discoveryApiKey,
+      mode: overrides?.authMode ?? "api_key",
+      source: overrides?.authSource ?? (apiKey ? "env" : "none"),
+      profileId: overrides?.profileId,
     }),
   } as never;
 }
@@ -109,8 +120,8 @@ describe("omniroute provider plugin", () => {
     expect(manifest.providers).toContain("omniroute");
     expect(manifest.contracts.embeddingProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.imageGenerationProviders).toEqual(["omniroute"]);
-    expect(manifest.modelCatalog.providers.omniroute).toBeDefined();
-    expect(manifest.modelCatalog.providers.omniroute.api).toBe("openai-completions");
+    expect(manifest.modelCatalog.providers).toBeUndefined();
+    expect(manifest.modelCatalog.discovery).toEqual({ omniroute: "runtime" });
   });
 
   it("has a valid entry point", () => {
@@ -123,16 +134,7 @@ describe("omniroute provider plugin", () => {
     expect(mod.OMNIROUTE_API_KEY_ENV_VAR).toBe("OMNIROUTE_API_KEY");
     expect(mod.OMNIROUTE_BASE_URL_ENV_VAR).toBe("OMNIROUTE_BASE_URL");
     expect(mod.OMNIROUTE_DEFAULT_BASE_URL).toBe("http://localhost:20128/v1");
-    expect(mod.OMNIROUTE_DEFAULT_MODEL_REF).toBe("omniroute/auto");
-  });
-
-  it("builds a provider catalog with correct shape", async () => {
-    const { buildOmniRouteProvider } = await import("./provider-catalog.js");
-    const catalog = buildOmniRouteProvider();
-    expect(catalog.baseUrl).toBe("http://localhost:20128/v1");
-    expect(catalog.api).toBe("openai-completions");
-    expect(catalog.models).toHaveLength(1);
-    expect(catalog.models![0].id).toBe("auto");
+    expect("OMNIROUTE_DEFAULT_MODEL_REF" in mod).toBe(false);
   });
 
   it("forwards AbortSignal to fetch for chat model discovery", async () => {
@@ -216,6 +218,181 @@ describe("omniroute provider plugin", () => {
         supportsTools: true,
       },
     });
+    expect(models[0]).toMatchObject({
+      id: "auto",
+      reasoning: true,
+      compat: {
+        supportsReasoningEffort: true,
+        supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
+      },
+      thinkingLevelMap: { off: "none", low: "low", xhigh: "xhigh", max: null },
+    });
+  });
+
+  it("does not treat auto or reasoning-only models as controllable thinking models", async () => {
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          { id: "auto", type: "chat" },
+          { id: "provider/reasoning-only", type: "chat", capabilities: { reasoning: true } },
+          {
+            id: "provider/thinking-disabled",
+            type: "chat",
+            capabilities: {
+              reasoning: true,
+              thinking: false,
+              supportsThinking: false,
+              effort_tiers: ["none", "low", "high"],
+            },
+          },
+        ],
+      }),
+    } as never);
+
+    const models = await fetchOmniRouteChatModels({ baseUrl: "http://localhost:20128/v1" });
+
+    expect(models).toMatchObject([
+      { id: "auto", reasoning: false },
+      { id: "provider/reasoning-only", reasoning: true },
+      { id: "provider/thinking-disabled", reasoning: true },
+    ]);
+    for (const model of models) {
+      expect(model.compat?.supportsReasoningEffort).not.toBe(true);
+      expect(model.compat?.supportedReasoningEfforts).toBeUndefined();
+      if (model.reasoning) {
+        expect(model.thinkingLevelMap).toEqual({
+          off: null,
+          minimal: null,
+          low: null,
+          medium: null,
+          high: null,
+          xhigh: null,
+          max: null,
+        });
+      } else {
+        expect(model.thinkingLevelMap).toBeUndefined();
+      }
+    }
+  });
+
+  it("uses explicit thinking effort tiers exactly and canonical tiers only for controllable thinking", async () => {
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "provider/explicit-tiers",
+            type: "chat",
+            capabilities: {
+              reasoning: true,
+              supportsThinking: true,
+              effort_tiers: ["high", "none", "max", "ultra", "high", "invalid", 42],
+            },
+          },
+          {
+            id: "provider/canonical-thinking",
+            type: "chat",
+            capabilities: { thinking: true },
+          },
+        ],
+      }),
+    } as never);
+
+    const models = await fetchOmniRouteChatModels({ baseUrl: "http://localhost:20128/v1" });
+
+    expect(models[0]).toMatchObject({
+      id: "provider/explicit-tiers",
+      reasoning: true,
+      compat: {
+        supportsReasoningEffort: true,
+      },
+      thinkingLevelMap: { off: "none", high: "high", max: "max", xhigh: null },
+    });
+    expect([...models[0].compat!.supportedReasoningEfforts!].sort()).toEqual([
+      "high",
+      "max",
+      "none",
+    ]);
+    expect(models[0].compat!.supportedReasoningEfforts).not.toContain("ultra");
+    expect(models[1]).toMatchObject({
+      id: "provider/canonical-thinking",
+      reasoning: true,
+      compat: {
+        supportsReasoningEffort: true,
+        supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
+      },
+    });
+  });
+
+  it("projects off and supported tiers through the installed OpenClaw completions transport", async () => {
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "provider/reasoning-wire",
+            type: "chat",
+            capabilities: {
+              reasoning: true,
+              supportsThinking: true,
+              effort_tiers: ["none", "low", "medium", "high", "xhigh", "max"],
+            },
+          },
+        ],
+      }),
+    } as never);
+    const [projectedModel] = await fetchOmniRouteChatModels({
+      baseUrl: "http://localhost:20128/v1",
+    });
+
+    const pluginEntryPath = fileURLToPath(import.meta.resolve("openclaw/plugin-sdk/plugin-entry"));
+    const openClawDistDir = resolve(dirname(pluginEntryPath), "..");
+    const transportFile = readdirSync(openClawDistDir).find(
+      (file) => file.startsWith("openai-transport-stream-") && file.endsWith(".js"),
+    );
+    expect(transportFile).toBeDefined();
+    const transportPath = join(openClawDistDir, transportFile!);
+    const transportSource = readFileSync(transportPath, "utf8");
+    const exportAlias = transportSource.match(
+      /buildOpenAICompletionsParams as ([A-Za-z_$][\w$]*)/,
+    )?.[1];
+    expect(exportAlias).toBeDefined();
+    const transportModule = (await import(pathToFileURL(transportPath).href)) as Record<
+      string,
+      unknown
+    >;
+    const buildParams = transportModule[exportAlias!] as (
+      model: Record<string, unknown>,
+      context: Record<string, unknown>,
+      options: Record<string, unknown>,
+    ) => Record<string, unknown>;
+    expect(buildParams).toBeTypeOf("function");
+
+    const model = {
+      ...projectedModel,
+      provider: "omniroute",
+      api: "openai-completions",
+      baseUrl: "http://localhost:20128/v1",
+    };
+    const context = { messages: [{ role: "user", content: "hello" }] };
+
+    // OpenClaw owns the session/default level; its bare completions fallback is high.
+    expect(buildParams(model, context, {}).reasoning_effort).toBe("high");
+    expect(buildParams(model, context, { reasoningEffort: "none" }).reasoning_effort).toBe(
+      "none",
+    );
+    expect(buildParams(model, context, { reasoningEffort: "off" }).reasoning_effort).toBe(
+      "none",
+    );
+    for (const effort of ["low", "medium", "high", "xhigh", "max"]) {
+      expect(buildParams(model, context, { reasoningEffort: effort }).reasoning_effort).toBe(
+        effort,
+      );
+    }
   });
 
   it("uses OmniRoute supported_endpoints as the live chat catalog source of truth", async () => {
@@ -486,23 +663,101 @@ describe("omniroute provider plugin", () => {
     ]);
   });
 
-  it("falls back to the static auto model when live discovery fails", async () => {
-    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+  it("does not fabricate a static auto model when live discovery fails", async () => {
+    const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: false,
       status: 401,
       text: async () => "secret-key should not be read into errors",
     } as never);
 
-    const catalog = await buildLiveOmniRouteProvider(
+    const catalog = await buildOmniRouteCatalog(
       mockCatalogContext({
         baseUrl: "http://omniroute.example/v1",
         apiKey: "secret-key",
       }),
     );
 
-    expect(catalog.baseUrl).toBe("http://omniroute.example/v1");
-    expect(catalog.models.map((model) => model.id)).toEqual(["auto"]);
+    expect(catalog).toBeNull();
+  });
+
+  it("isolates the live catalog cache by auth profile and effective discovery credential", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ id: "provider/key-one", type: "chat" }] }),
+      } as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ id: "provider/key-two", type: "chat" }] }),
+      } as never)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ id: "provider/profile-two", type: "chat" }] }),
+      } as never);
+    const baseUrl = "http://credential-isolation.example/v1";
+
+    const first = await buildLiveOmniRouteProvider(
+      mockCatalogContext({ baseUrl, apiKey: "key-one", profileId: "omniroute:one" }),
+    );
+    const credentialChanged = await buildLiveOmniRouteProvider(
+      mockCatalogContext({ baseUrl, apiKey: "key-two", profileId: "omniroute:one" }),
+    );
+    const profileChanged = await buildLiveOmniRouteProvider(
+      mockCatalogContext({ baseUrl, apiKey: "key-two", profileId: "omniroute:two" }),
+    );
+
+    expect(first?.models.map((model) => model.id)).toEqual(["provider/key-one"]);
+    expect(credentialChanged?.models.map((model) => model.id)).toEqual(["provider/key-two"]);
+    expect(profileChanged?.models.map((model) => model.id)).toEqual(["provider/profile-two"]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
+  it("uses the discovery credential for catalog fetches without replacing the runtime credential", async () => {
+    const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ id: "provider/discovery-key", type: "chat" }] }),
+    } as never);
+    const context = mockCatalogContext({
+      baseUrl: "http://discovery-key.example/v1",
+      apiKey: "runtime-credential-marker",
+      discoveryApiKey: "discovery-secret",
+      profileId: "omniroute:discovery",
+    });
+
+    const catalog = await buildOmniRouteCatalog(context);
+
+    expect(catalog).toMatchObject({
+      provider: {
+        baseUrl: "http://discovery-key.example/v1",
+        apiKey: "runtime-credential-marker",
+        models: [{ id: "provider/discovery-key" }],
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://discovery-key.example/v1/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer discovery-secret" }),
+      }),
+    );
+  });
+
+  it("does not register a runtime provider from a discovery-only credential", async () => {
+    const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+
+    const catalog = await buildOmniRouteCatalog(
+      mockCatalogContext({
+        baseUrl: "http://discovery-only.example/v1",
+        discoveryApiKey: "discovery-secret",
+      }),
+    );
+
+    expect(catalog).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("does not cache an empty live catalog", async () => {
@@ -522,18 +777,53 @@ describe("omniroute provider plugin", () => {
       apiKey: "secret-key",
     });
 
-    await expect(buildLiveOmniRouteProvider(context)).resolves.toMatchObject({ models: [] });
+    await expect(buildLiveOmniRouteProvider(context)).resolves.toBeNull();
     await expect(buildLiveOmniRouteProvider(context)).resolves.toMatchObject({
       models: [{ id: "recovered-model" }],
     });
     expect(fetchMock).toHaveBeenCalledTimes(2);
   });
 
+  it("does not let an expired request delete its cached replacement", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(1_000);
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    let rejectExpiredRequest!: (reason: Error) => void;
+    const expiredResponse = new Promise<never>((_resolve, reject) => {
+      rejectExpiredRequest = reject;
+    });
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockReturnValueOnce(expiredResponse)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ data: [{ id: "replacement-model", type: "chat" }] }),
+      } as never);
+    const context = mockCatalogContext({
+      baseUrl: "http://expired-cache-race.example/v1",
+      apiKey: "secret-key",
+    });
+
+    const expiredLoad = buildLiveOmniRouteProvider(context);
+    nowSpy.mockReturnValue(31_001);
+    await expect(buildLiveOmniRouteProvider(context)).resolves.toMatchObject({
+      models: [{ id: "replacement-model" }],
+    });
+
+    rejectExpiredRequest(new Error("expired request failed"));
+    await expect(expiredLoad).resolves.toBeNull();
+    await expect(buildLiveOmniRouteProvider(context)).resolves.toMatchObject({
+      models: [{ id: "replacement-model" }],
+    });
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(warnSpy).toHaveBeenCalledTimes(1);
+  });
+
   it("uses OMNIROUTE_BASE_URL when no config base URL is set", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: false,
-      status: 503,
+      ok: true,
+      json: async () => ({ data: [{ id: "provider/env-url", type: "chat" }] }),
     } as never);
 
     const catalog = await buildLiveOmniRouteProvider(
@@ -543,14 +833,14 @@ describe("omniroute provider plugin", () => {
       }),
     );
 
-    expect(catalog.baseUrl).toBe("http://env-omniroute.example/v1");
+    expect(catalog?.baseUrl).toBe("http://env-omniroute.example/v1");
   });
 
   it("uses OMNIROUTE_BASE_URL when config only has the default base URL", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: false,
-      status: 503,
+      ok: true,
+      json: async () => ({ data: [{ id: "provider/env-url", type: "chat" }] }),
     } as never);
 
     const catalog = await buildLiveOmniRouteProvider(
@@ -561,14 +851,14 @@ describe("omniroute provider plugin", () => {
       }),
     );
 
-    expect(catalog.baseUrl).toBe("http://env-omniroute.example/v1");
+    expect(catalog?.baseUrl).toBe("http://env-omniroute.example/v1");
   });
 
   it("prefers config base URL over OMNIROUTE_BASE_URL", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: false,
-      status: 503,
+      ok: true,
+      json: async () => ({ data: [{ id: "provider/config-url", type: "chat" }] }),
     } as never);
 
     const catalog = await buildLiveOmniRouteProvider(
@@ -579,13 +869,56 @@ describe("omniroute provider plugin", () => {
       }),
     );
 
-    expect(catalog.baseUrl).toBe("http://config-omniroute.example/v1");
+    expect(catalog?.baseUrl).toBe("http://config-omniroute.example/v1");
   });
 
   it("applies config without errors", async () => {
     const { applyOmniRouteConfig } = await import("./onboard.js");
     const config = applyOmniRouteConfig({} as never);
-    expect(config).toBeDefined();
+    expect(config).toMatchObject({
+      models: {
+        mode: "merge",
+        providers: {
+          omniroute: {
+            api: "openai-completions",
+            baseUrl: "http://localhost:20128/v1",
+            models: [],
+          },
+        },
+      },
+    });
+    expect(config.models?.providers?.omniroute?.models).toEqual([]);
+    expect(config.agents?.defaults?.model).toBeUndefined();
+    expect(config.agents?.defaults?.models).toBeUndefined();
+  });
+
+  it("preserves existing OmniRoute models and base URL during onboarding", async () => {
+    const { applyOmniRouteConfig } = await import("./onboard.js");
+    const existingModels = [
+      {
+        id: "auto/best-coding",
+        name: "Existing combo",
+        reasoning: false,
+        input: ["text"],
+      },
+    ];
+    const config = applyOmniRouteConfig({
+      models: {
+        providers: {
+          omniroute: {
+            api: "openai-completions",
+            baseUrl: "https://existing.example/v1",
+            models: existingModels,
+          },
+        },
+      },
+    } as never);
+
+    expect(config.models?.providers?.omniroute).toMatchObject({
+      baseUrl: "https://existing.example/v1",
+      models: existingModels,
+    });
+    expect(config.models?.providers?.omniroute?.models).toHaveLength(1);
   });
 
   it("preserves an existing primary model during onboarding", async () => {
@@ -605,6 +938,7 @@ describe("omniroute provider plugin", () => {
       primary: "openai/gpt-5",
       fallbacks: ["openai/gpt-4.1"],
     });
+    expect(config.agents?.defaults?.models?.["omniroute/auto"]).toBeUndefined();
   });
 
   it("has a valid plugin entry", async () => {
@@ -643,9 +977,28 @@ describe("omniroute provider plugin", () => {
     expect(registerProvider).toHaveBeenCalledWith(
       expect.objectContaining({
         catalog: expect.objectContaining({ run: expect.any(Function) }),
-        staticCatalog: expect.objectContaining({ run: expect.any(Function) }),
       }),
     );
+    expect(registerProvider.mock.calls[0]?.[0]).not.toHaveProperty("staticCatalog");
+    expect(registerProvider.mock.calls[0]?.[0].auth?.[0]).not.toHaveProperty("defaultModel");
+    const resolveThinkingProfile = registerProvider.mock.calls[0]?.[0].resolveThinkingProfile;
+    expect(resolveThinkingProfile).toBeTypeOf("function");
+    expect(
+      resolveThinkingProfile({
+        provider: "omniroute",
+        modelId: "provider/high-max-only",
+        reasoning: true,
+        compat: { supportedReasoningEfforts: ["high", "max"] },
+      }),
+    ).toEqual({ levels: [{ id: "high" }, { id: "max" }] });
+    expect(
+      resolveThinkingProfile({
+        provider: "omniroute",
+        modelId: "provider/fixed-reasoning",
+        reasoning: true,
+        compat: {},
+      }),
+    ).toEqual({ levels: [{ id: "off" }], defaultLevel: "off" });
     expect(registerEmbeddingProvider).toHaveBeenCalledWith(
       expect.objectContaining({
         id: "omniroute",
