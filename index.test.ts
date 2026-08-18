@@ -8,6 +8,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIN_OPENCLAW_VERSION = "2026.7.1";
 const REQUIRED_OPENCLAW_SDK_EXPORTS = [
   "./plugin-sdk/agent-runtime",
+  "./plugin-sdk/config-runtime",
   "./plugin-sdk/plugin-entry",
   "./plugin-sdk/provider-auth",
   "./plugin-sdk/secret-input-runtime",
@@ -59,6 +60,7 @@ describe("omniroute provider plugin", () => {
     expect(pkg.name).toBe("@ekinnee/omniroute-provider");
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(pkg.openclaw.extensions).toContain("./dist/index.js");
+    expect(pkg.bin["omniroute-catalog-audit"]).toBe("./dist/catalog-audit-bin.js");
     expect(pkg.openclaw.compat.pluginApi).toBeDefined();
     expect(pkg.openclaw.build.openclawVersion).toBeDefined();
   });
@@ -83,6 +85,9 @@ describe("omniroute provider plugin", () => {
       "models.ts",
       "onboard.ts",
       "provider-catalog.ts",
+      "catalog-audit.ts",
+      "catalog-audit-cli.ts",
+      "catalog-audit-bin.ts",
       "provider-compat.ts",
       "embedding-provider.ts",
       "image-generation-provider.ts",
@@ -745,6 +750,31 @@ describe("omniroute provider plugin", () => {
     );
   });
 
+  it("honors configured auth profile order for both catalog discovery and runtime", async () => {
+    const { resolveOmniRouteCatalogCredentials } = await import("./provider-catalog.js");
+    const resolveConcreteApiKey = vi.fn().mockResolvedValue("ordered-profile-b");
+
+    const credentials = await resolveOmniRouteCatalogCredentials({
+      auth: {
+        apiKey: "stored-profile-a",
+        discoveryApiKey: "stored-profile-a",
+        mode: "api_key",
+        source: "profile",
+        profileId: "omniroute:a",
+      },
+      config: {},
+      resolveConcreteApiKey,
+    });
+
+    expect(credentials).toEqual({
+      runtimeApiKey: "ordered-profile-b",
+      discoveryApiKey: "ordered-profile-b",
+    });
+    expect(resolveConcreteApiKey).toHaveBeenCalledWith(
+      expect.objectContaining({ cfg: {} }),
+    );
+  });
+
   it("does not register a runtime provider from a discovery-only credential", async () => {
     const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
     const fetchMock = vi.spyOn(globalThis, "fetch");
@@ -1125,6 +1155,34 @@ describe("omniroute provider plugin", () => {
     });
 
     expect(apiKey).toBe("resolved-secret");
+  });
+
+  it("resolves the configured profile order instead of profile store insertion order", async () => {
+    const { resolveOmniRouteApiKey } = await import("./auth.js");
+    const apiKey = await resolveOmniRouteApiKey({
+      cfg: {
+        auth: {
+          order: { omniroute: ["omniroute:b", "omniroute:a"] },
+        },
+      } as never,
+      store: {
+        version: 1,
+        profiles: {
+          "omniroute:a": {
+            type: "api_key",
+            provider: "omniroute",
+            key: "stored-first-a",
+          },
+          "omniroute:b": {
+            type: "api_key",
+            provider: "omniroute",
+            key: "ordered-first-b",
+          },
+        },
+      } as never,
+    });
+
+    expect(apiKey).toBe("ordered-first-b");
   });
 
   it("preserves configured request auth, headers, TLS, and proxy policy", async () => {

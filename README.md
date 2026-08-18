@@ -50,6 +50,21 @@ Override the base URL in your OpenClaw config:
 
 This is useful for Docker, remote, or cloud-hosted OmniRoute instances.
 
+### Catalog Metadata Audit
+
+The plugin package includes a read-only catalog audit command. It loads the same OpenClaw configuration and agent-scoped OmniRoute credentials, performs `GET /v1/models`, and reports only metadata the gateway actually advertised.
+
+```bash
+# When the package executable is linked into PATH
+omniroute-catalog-audit --agent main
+
+# JSON output from a default ClawHub extension install
+node "${OPENCLAW_STATE_DIR:-$HOME/.openclaw}/extensions/omniroute/dist/catalog-audit-bin.js" \
+  --agent main --json
+```
+
+The report classifies chat, embedding, image, and other rows; identifies invalid rows, duplicate IDs, and relevant missing advertised metadata; and redacts credentials and URL query strings. Missing metadata stays unknown—it is not replaced with a guessed model capability. The command makes no configuration changes and sends no inference request.
+
 ### Embeddings
 
 OmniRoute can also serve OpenClaw embedding requests through `POST /v1/embeddings`.
@@ -112,11 +127,12 @@ The web search tool supports `query`, `count` (1-10), `freshness` (day/week/mont
 
 1. **Authenticated live model discovery** — The plugin fetches `GET /v1/models` from your OmniRoute gateway and registers its chat-capable rows as `omniroute/<model-id>`. That response is authoritative: model and combo IDs are preserved exactly, and the available list varies with the gateway's upstream-provider configuration and the authenticated API key.
 2. **No synthetic default** — The plugin does not hardcode `auto`, any other combo, or a fallback model. A model is shown only when OmniRoute advertises it; discovery failure does not fabricate a model selection.
-3. **Reasoning controls from metadata** — Thinking/reasoning choices are exposed only when the returned row's capability metadata supports them. OpenClaw's off state is sent as `reasoning_effort: "none"`; supported non-off levels are passed through using the returned effort metadata. OpenClaw continues to own the configured/session default when no level is explicitly selected—the plugin does not invent another default.
-4. **OpenAI-compatible transport** — Text requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
-5. **Configured embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint and require a configured embedding model.
-6. **Configured image generation** — Image requests use OmniRoute's OpenAI-compatible `POST /v1/images/generations` endpoint with a configured image model.
-7. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
+3. **Catalog diagnostics** — The packaged `omniroute-catalog-audit` command shows the authenticated gateway's advertised metadata without filling gaps with plugin guesses.
+4. **Reasoning controls from metadata** — Thinking/reasoning choices are exposed only when the returned row's capability metadata supports them. OpenClaw's off state is sent as `reasoning_effort: "none"`; supported non-off levels are passed through using the returned effort metadata. OpenClaw continues to own the configured/session default when no level is explicitly selected—the plugin does not invent another default.
+5. **OpenAI-compatible transport** — Text requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
+6. **Configured embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint and require a configured embedding model.
+7. **Configured image generation** — Image requests use OmniRoute's OpenAI-compatible `POST /v1/images/generations` endpoint with a configured image model.
+8. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
 
 Temperature suppression and arbitrary provider-specific request flags are not inferred from catalog rows. They require future transport-level support and validation.
 

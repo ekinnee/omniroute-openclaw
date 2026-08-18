@@ -1,5 +1,6 @@
 import type { ProviderCatalogContext, ProviderCatalogResult } from "openclaw/plugin-sdk/plugin-entry";
 import { type OmniRouteModelDefinition } from "./models.js";
+import { resolveOmniRouteApiKey } from "./auth.js";
 type OmniRouteProviderConfig = {
     baseUrl: string;
     api: "openai-completions";
@@ -54,6 +55,17 @@ export declare function fetchOmniRouteImageModels(params: {
     apiKey?: string;
     signal?: AbortSignal;
 }): Promise<OmniRouteImageModel[]>;
+type OmniRouteCatalogCredentials = {
+    runtimeApiKey: string;
+    discoveryApiKey: string;
+};
+export declare function resolveOmniRouteCatalogCredentials(params: {
+    auth: ReturnType<ProviderCatalogContext["resolveProviderAuth"]>;
+    config: ProviderCatalogContext["config"];
+    agentDir?: string;
+    workspaceDir?: string;
+    resolveConcreteApiKey?: typeof resolveOmniRouteApiKey;
+}): OmniRouteCatalogCredentials | null | Promise<OmniRouteCatalogCredentials | null>;
 export declare function buildLiveOmniRouteProvider(ctx: ProviderCatalogContext): Promise<OmniRouteProviderConfig | null>;
 export declare function buildOmniRouteCatalog(ctx: ProviderCatalogContext): Promise<ProviderCatalogResult>;
 export {};

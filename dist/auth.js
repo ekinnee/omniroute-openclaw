@@ -21,6 +21,7 @@ export async function resolveOmniRouteApiKey(params) {
         provider: OMNIROUTE_PROVIDER_ID,
         cfg: params.cfg,
         agentDir: params.agentDir,
+        workspaceDir: params.workspaceDir,
         store: params.store,
     });
     return resolved.apiKey;

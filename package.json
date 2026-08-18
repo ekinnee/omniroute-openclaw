@@ -5,6 +5,9 @@
   "description": "OpenClaw OmniRoute provider plugin",
   "type": "module",
   "packageManager": "pnpm@9.15.4",
+  "bin": {
+    "omniroute-catalog-audit": "./dist/catalog-audit-bin.js"
+  },
   "files": [
     "dist",
     "openclaw.plugin.json",
