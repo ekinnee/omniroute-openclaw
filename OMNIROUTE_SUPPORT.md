@@ -14,7 +14,7 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Read-only catalog metadata audit: `omniroute-catalog-audit`
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 - Image generation provider: `omniroute`, backed by `POST /v1/images/generations`
-- Current plugin version: `2.0.0`
+- Current plugin version: `2.1.0`
 - Next planned capability: speech (TTS) through `POST /v1/audio/speech`
 
 The text provider uses OmniRoute's authenticated live model catalog and filters the response to chat-capable rows. `GET /v1/models` is authoritative: preserve its IDs exactly, do not hardcode `auto` or any other combo/default, and do not synthesize a static fallback when discovery is unavailable. The catalog can differ by gateway upstream-provider configuration and API-key permissions. Embeddings and image generation require explicit models from OmniRoute's catalog and likewise never synthesize `auto`.
