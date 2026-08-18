@@ -109,14 +109,17 @@ jobs:
           corepack prepare "$OPENCLAW_PACKAGE_MANAGER" --activate
           pnpm install --frozen-lockfile
           pnpm build
-          mkdir -p /tmp/openclaw-main-package
-          npm pack --cache /tmp/omniroute-openclaw-npm-cache --pack-destination /tmp/openclaw-main-package
+          node scripts/package-openclaw-for-docker.mjs \
+            --allow-unreleased-changelog \
+            --skip-build \
+            --output-dir /tmp/openclaw-main-package \
+            --output-name openclaw-main.tgz
       - name: Load the packaged plugin with packaged OpenClaw main
         run: |
           mkdir -p /tmp/omniroute-openclaw-compat
           cd /tmp/omniroute-openclaw-compat
           npm init --yes
-          npm install --cache /tmp/omniroute-openclaw-npm-cache --ignore-scripts --legacy-peer-deps --no-save /tmp/openclaw-main-package/*.tgz /tmp/omniroute-openclaw-package/*.tgz
+          npm install --cache /tmp/omniroute-openclaw-npm-cache --ignore-scripts --legacy-peer-deps --no-save /tmp/openclaw-main-package/openclaw-main.tgz /tmp/omniroute-openclaw-package/*.tgz
           ./node_modules/.bin/omniroute-catalog-audit --help | grep -F "Usage: omniroute-catalog-audit"
           node --input-type=module <<'NODE'
           import plugin from "@ekinnee/omniroute-provider/dist/index.js";
