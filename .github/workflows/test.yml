@@ -6,6 +6,13 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
     runs-on: ubuntu-latest
@@ -14,8 +21,12 @@ jobs:
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24
+          node-version: 24.15.0
           cache: pnpm
-      - run: pnpm install
+      - run: pnpm install --frozen-lockfile
       - run: pnpm build
+      - name: Check dist is up to date
+        run: |
+          git diff --exit-code -- dist/ \
+            || { echo "::error::dist/ is stale — run 'pnpm build' and commit the regenerated artifacts"; exit 1; }
       - run: pnpm test
