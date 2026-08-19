@@ -481,9 +481,6 @@ export function resolveOmniRouteCatalogCredentials(params: {
   resolveConcreteApiKey?: typeof resolveOmniRouteApiKey;
   resolveConfiguredApiKey?: ProviderCatalogContext["resolveProviderApiKey"];
 }): OmniRouteCatalogCredentials | null | Promise<OmniRouteCatalogCredentials | null> {
-  const runtimeApiKey = params.auth.apiKey;
-  const discoveryApiKey = params.auth.discoveryApiKey ?? runtimeApiKey;
-
   // The host's lightweight catalog resolver currently selects profile entries
   // by store order. Resolve profile-backed auth through the full public auth
   // path so both discovery and runtime honor the configured profile order.

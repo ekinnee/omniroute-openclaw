@@ -65,6 +65,7 @@ export declare function resolveOmniRouteCatalogCredentials(params: {
     agentDir?: string;
     workspaceDir?: string;
     resolveConcreteApiKey?: typeof resolveOmniRouteApiKey;
+    resolveConfiguredApiKey?: ProviderCatalogContext["resolveProviderApiKey"];
 }): OmniRouteCatalogCredentials | null | Promise<OmniRouteCatalogCredentials | null>;
 export declare function buildLiveOmniRouteProvider(ctx: ProviderCatalogContext): Promise<OmniRouteProviderConfig | null>;
 export declare function buildOmniRouteCatalog(ctx: ProviderCatalogContext): Promise<ProviderCatalogResult>;

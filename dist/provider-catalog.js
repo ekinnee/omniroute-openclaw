@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, } from "./models.js";
+import { resolveOmniRouteApiKey } from "./auth.js";
 const liveCatalogCache = new Map();
 const LIVE_CATALOG_TTL_MS = 30_000;
 function deleteLiveCatalogCacheEntryIfCurrent(key, entry) {
@@ -311,18 +312,46 @@ export async function fetchOmniRouteEmbeddingModels(params) {
 export async function fetchOmniRouteImageModels(params) {
     return fetchOmniRouteModels(params, buildOmniRouteImageModelFromCatalogEntry, "image");
 }
+export function resolveOmniRouteCatalogCredentials(params) {
+    // The host's lightweight catalog resolver currently selects profile entries
+    // by store order. Resolve profile-backed auth through the full public auth
+    // path so both discovery and runtime honor the configured profile order.
+    if (params.auth.source === "profile") {
+        return (params.resolveConcreteApiKey ?? resolveOmniRouteApiKey)({
+            cfg: params.config,
+            agentDir: params.agentDir,
+            workspaceDir: params.workspaceDir,
+        }).then((concreteApiKey) => concreteApiKey
+            ? { runtimeApiKey: concreteApiKey, discoveryApiKey: concreteApiKey }
+            : null);
+    }
+    // The auth resolver preserves provenance and can report no configured key;
+    // fall back to the host's configured-key resolver when it does.
+    const resolvedApiKey = params.resolveConfiguredApiKey?.("omniroute");
+    const fallbackRuntimeApiKey = params.auth.apiKey ?? resolvedApiKey?.apiKey;
+    const fallbackDiscoveryApiKey = params.auth.discoveryApiKey ?? resolvedApiKey?.discoveryApiKey ?? fallbackRuntimeApiKey;
+    return fallbackRuntimeApiKey && fallbackDiscoveryApiKey
+        ? { runtimeApiKey: fallbackRuntimeApiKey, discoveryApiKey: fallbackDiscoveryApiKey }
+        : null;
+}
 export async function buildLiveOmniRouteProvider(ctx) {
     const baseUrl = resolveConfiguredBaseUrl(ctx);
     const auth = ctx.resolveProviderAuth("omniroute");
-    // Catalog callers supply both resolvers: auth keeps profile provenance while
-    // the API-key resolver carries configured provider credentials.
-    const resolvedApiKey = ctx.resolveProviderApiKey("omniroute");
-    const runtimeApiKey = auth.apiKey ?? resolvedApiKey.apiKey;
-    const discoveryApiKey = auth.discoveryApiKey ?? resolvedApiKey.discoveryApiKey ?? runtimeApiKey;
-    if (!runtimeApiKey || !discoveryApiKey) {
-        return null;
-    }
     try {
+        const credentialsOrPromise = resolveOmniRouteCatalogCredentials({
+            auth,
+            config: ctx.config,
+            agentDir: ctx.agentDir,
+            workspaceDir: ctx.workspaceDir,
+            resolveConfiguredApiKey: ctx.resolveProviderApiKey,
+        });
+        const credentials = credentialsOrPromise instanceof Promise
+            ? await credentialsOrPromise
+            : credentialsOrPromise;
+        if (!credentials) {
+            return null;
+        }
+        const { runtimeApiKey, discoveryApiKey } = credentials;
         const models = await getCachedLiveCatalogValue({
             key: JSON.stringify([
                 "omniroute",
