@@ -103,7 +103,13 @@ const NON_CHAT_MODEL_TYPES = new Set([
   "video",
   "music",
 ]);
-const CHAT_ENDPOINTS = new Set(["chat", "chat-completions", "chat_completions"]);
+const CHAT_ENDPOINTS = new Set([
+  "chat",
+  "chat-completions",
+  "chat_completions",
+  "/v1/chat/completions",
+  "/api/v1/chat/completions",
+]);
 const EMBEDDING_ENDPOINTS = new Set(["embedding", "embeddings"]);
 const IMAGE_ENDPOINTS = new Set(["image", "images", "image-generation", "image_generation"]);
 const OMNIROUTE_CANONICAL_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const;
@@ -473,10 +479,8 @@ export function resolveOmniRouteCatalogCredentials(params: {
   agentDir?: string;
   workspaceDir?: string;
   resolveConcreteApiKey?: typeof resolveOmniRouteApiKey;
+  resolveConfiguredApiKey?: ProviderCatalogContext["resolveProviderApiKey"];
 }): OmniRouteCatalogCredentials | null | Promise<OmniRouteCatalogCredentials | null> {
-  const runtimeApiKey = params.auth.apiKey;
-  const discoveryApiKey = params.auth.discoveryApiKey ?? runtimeApiKey;
-
   // The host's lightweight catalog resolver currently selects profile entries
   // by store order. Resolve profile-backed auth through the full public auth
   // path so both discovery and runtime honor the configured profile order.
@@ -492,8 +496,14 @@ export function resolveOmniRouteCatalogCredentials(params: {
     );
   }
 
-  return runtimeApiKey && discoveryApiKey
-    ? { runtimeApiKey, discoveryApiKey }
+  // The auth resolver preserves provenance and can report no configured key;
+  // fall back to the host's configured-key resolver when it does.
+  const resolvedApiKey = params.resolveConfiguredApiKey?.("omniroute");
+  const fallbackRuntimeApiKey = params.auth.apiKey ?? resolvedApiKey?.apiKey;
+  const fallbackDiscoveryApiKey =
+    params.auth.discoveryApiKey ?? resolvedApiKey?.discoveryApiKey ?? fallbackRuntimeApiKey;
+  return fallbackRuntimeApiKey && fallbackDiscoveryApiKey
+    ? { runtimeApiKey: fallbackRuntimeApiKey, discoveryApiKey: fallbackDiscoveryApiKey }
     : null;
 }
 
@@ -508,6 +518,7 @@ export async function buildLiveOmniRouteProvider(
       config: ctx.config,
       agentDir: ctx.agentDir,
       workspaceDir: ctx.workspaceDir,
+      resolveConfiguredApiKey: ctx.resolveProviderApiKey,
     });
     const credentials = credentialsOrPromise instanceof Promise
       ? await credentialsOrPromise
