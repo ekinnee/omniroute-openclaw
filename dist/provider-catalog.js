@@ -43,7 +43,13 @@ const NON_CHAT_MODEL_TYPES = new Set([
     "video",
     "music",
 ]);
-const CHAT_ENDPOINTS = new Set(["chat", "chat-completions", "chat_completions"]);
+const CHAT_ENDPOINTS = new Set([
+    "chat",
+    "chat-completions",
+    "chat_completions",
+    "/v1/chat/completions",
+    "/api/v1/chat/completions",
+]);
 const EMBEDDING_ENDPOINTS = new Set(["embedding", "embeddings"]);
 const IMAGE_ENDPOINTS = new Set(["image", "images", "image-generation", "image_generation"]);
 const OMNIROUTE_CANONICAL_EFFORTS = ["none", "low", "medium", "high", "xhigh"];

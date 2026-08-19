@@ -429,6 +429,12 @@ describe("omniroute provider plugin", () => {
             capabilities: { vision: true },
           },
           {
+            id: "openai/gpt-4.1",
+            object: "model",
+            supported_endpoints: ["/v1/chat/completions"],
+            type: "image",
+          },
+          {
             id: "hf/diffusion-model",
             object: "model",
             owned_by: "huggingface",
@@ -458,6 +464,7 @@ describe("omniroute provider plugin", () => {
     expect(models.map((model) => model.id)).toEqual([
       "auto/best-coding",
       "openrouter/google/gemini-pro",
+      "openai/gpt-4.1",
     ]);
     expect(models[0]).toMatchObject({
       id: "auto/best-coding",
@@ -468,6 +475,7 @@ describe("omniroute provider plugin", () => {
       id: "openrouter/google/gemini-pro",
       input: ["text", "image"],
     });
+    expect(models[2]).toMatchObject({ id: "openai/gpt-4.1" });
   });
 
   it("does not synthesize auto when live OmniRoute discovery succeeds without it", async () => {
