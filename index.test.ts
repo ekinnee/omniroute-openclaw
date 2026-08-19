@@ -19,6 +19,8 @@ function mockCatalogContext(overrides?: {
   baseUrl?: string;
   apiKey?: string;
   discoveryApiKey?: string;
+  resolvedApiKey?: string;
+  resolvedDiscoveryApiKey?: string;
   envBaseUrl?: string;
   authMode?: string;
   authSource?: string;
@@ -39,7 +41,10 @@ function mockCatalogContext(overrides?: {
     env: {
       OMNIROUTE_BASE_URL: overrides?.envBaseUrl,
     },
-    resolveProviderApiKey: () => ({ apiKey }),
+    resolveProviderApiKey: () => ({
+      apiKey: overrides?.resolvedApiKey ?? apiKey,
+      discoveryApiKey: overrides?.resolvedDiscoveryApiKey ?? discoveryApiKey,
+    }),
     resolveProviderAuth: () => ({
       apiKey,
       discoveryApiKey,
@@ -772,6 +777,35 @@ describe("omniroute provider plugin", () => {
     });
     expect(resolveConcreteApiKey).toHaveBeenCalledWith(
       expect.objectContaining({ cfg: {} }),
+    );
+  });
+
+  it("uses the provider API-key resolver when auth has no configured credential", async () => {
+    const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ id: "provider/configured-key", type: "chat" }] }),
+    } as never);
+
+    const catalog = await buildOmniRouteCatalog(
+      mockCatalogContext({
+        baseUrl: "http://configured-key.example/v1",
+        resolvedApiKey: "runtime-credential-marker",
+        resolvedDiscoveryApiKey: "configured-discovery-secret",
+      }),
+    );
+
+    expect(catalog).toMatchObject({
+      provider: {
+        apiKey: "runtime-credential-marker",
+        models: [{ id: "provider/configured-key" }],
+      },
+    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://configured-key.example/v1/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({ Authorization: "Bearer configured-discovery-secret" }),
+      }),
     );
   });
 

@@ -473,6 +473,7 @@ export function resolveOmniRouteCatalogCredentials(params: {
   agentDir?: string;
   workspaceDir?: string;
   resolveConcreteApiKey?: typeof resolveOmniRouteApiKey;
+  resolveConfiguredApiKey?: ProviderCatalogContext["resolveProviderApiKey"];
 }): OmniRouteCatalogCredentials | null | Promise<OmniRouteCatalogCredentials | null> {
   const runtimeApiKey = params.auth.apiKey;
   const discoveryApiKey = params.auth.discoveryApiKey ?? runtimeApiKey;
@@ -492,8 +493,14 @@ export function resolveOmniRouteCatalogCredentials(params: {
     );
   }
 
-  return runtimeApiKey && discoveryApiKey
-    ? { runtimeApiKey, discoveryApiKey }
+  // The auth resolver preserves provenance and can report no configured key;
+  // fall back to the host's configured-key resolver when it does.
+  const resolvedApiKey = params.resolveConfiguredApiKey?.("omniroute");
+  const fallbackRuntimeApiKey = params.auth.apiKey ?? resolvedApiKey?.apiKey;
+  const fallbackDiscoveryApiKey =
+    params.auth.discoveryApiKey ?? resolvedApiKey?.discoveryApiKey ?? fallbackRuntimeApiKey;
+  return fallbackRuntimeApiKey && fallbackDiscoveryApiKey
+    ? { runtimeApiKey: fallbackRuntimeApiKey, discoveryApiKey: fallbackDiscoveryApiKey }
     : null;
 }
 
@@ -508,6 +515,7 @@ export async function buildLiveOmniRouteProvider(
       config: ctx.config,
       agentDir: ctx.agentDir,
       workspaceDir: ctx.workspaceDir,
+      resolveConfiguredApiKey: ctx.resolveProviderApiKey,
     });
     const credentials = credentialsOrPromise instanceof Promise
       ? await credentialsOrPromise
