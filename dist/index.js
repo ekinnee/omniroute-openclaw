@@ -9,6 +9,7 @@ import { buildOmniRouteCatalog, } from "./provider-catalog.js";
 import { createOmniRouteWebSearchProvider } from "./web-search-provider.js";
 import { buildOmniRouteVideoGenerationProvider } from "./video-generation-provider.js";
 import { buildOmniRouteReplayPolicy, buildOmniRouteThinkingProfile, } from "./provider-compat.js";
+import { fetchOmniRouteUsage, resolveOmniRouteUsageAuth } from "./usage.js";
 const plugin = definePluginEntry({
     id: OMNIROUTE_PROVIDER_ID,
     name: "OmniRoute Provider",
@@ -52,6 +53,8 @@ const plugin = definePluginEntry({
             buildReplayPolicy: buildOmniRouteReplayPolicy,
             resolveThinkingProfile: buildOmniRouteThinkingProfile,
             isModernModelRef: () => true,
+            resolveUsageAuth: resolveOmniRouteUsageAuth,
+            fetchUsageSnapshot: fetchOmniRouteUsage,
         });
         api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);
         api.registerImageGenerationProvider(buildOmniRouteImageGenerationProvider());

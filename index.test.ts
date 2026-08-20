@@ -13,6 +13,7 @@ const REQUIRED_OPENCLAW_SDK_EXPORTS = [
   "./plugin-sdk/provider-auth",
   "./plugin-sdk/secret-input-runtime",
   "./plugin-sdk/ssrf-runtime",
+  "./plugin-sdk/provider-usage",
 ] as const;
 
 function mockCatalogContext(overrides?: {
@@ -93,6 +94,7 @@ describe("omniroute provider plugin", () => {
       "catalog-audit.ts",
       "catalog-audit-cli.ts",
       "catalog-audit-bin.ts",
+      "usage.ts",
       "provider-compat.ts",
       "embedding-provider.ts",
       "image-generation-provider.ts",
@@ -130,6 +132,7 @@ describe("omniroute provider plugin", () => {
     expect(manifest.providers).toContain("omniroute");
     expect(manifest.contracts.embeddingProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.imageGenerationProviders).toEqual(["omniroute"]);
+    expect(manifest.contracts.usageProviders).toEqual(["omniroute"]);
     expect(manifest.modelCatalog.providers).toBeUndefined();
     expect(manifest.modelCatalog.discovery).toEqual({ omniroute: "runtime" });
   });
@@ -1053,6 +1056,10 @@ describe("omniroute provider plugin", () => {
     );
     expect(registerProvider.mock.calls[0]?.[0]).not.toHaveProperty("staticCatalog");
     expect(registerProvider.mock.calls[0]?.[0].auth?.[0]).not.toHaveProperty("defaultModel");
+    expect(registerProvider.mock.calls[0]?.[0]).toMatchObject({
+      resolveUsageAuth: expect.any(Function),
+      fetchUsageSnapshot: expect.any(Function),
+    });
     const resolveThinkingProfile = registerProvider.mock.calls[0]?.[0].resolveThinkingProfile;
     expect(resolveThinkingProfile).toBeTypeOf("function");
     expect(

@@ -21,6 +21,7 @@
   "contracts": {
     "embeddingProviders": ["omniroute"],
     "imageGenerationProviders": ["omniroute"],
+    "usageProviders": ["omniroute"],
     "webSearchProviders": ["omniroute"],
     "videoGenerationProviders": ["omniroute"]
   },

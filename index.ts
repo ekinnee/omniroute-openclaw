@@ -22,6 +22,7 @@ import {
   buildOmniRouteReplayPolicy,
   buildOmniRouteThinkingProfile,
 } from "./provider-compat.js";
+import { fetchOmniRouteUsage, resolveOmniRouteUsageAuth } from "./usage.js";
 
 const plugin: OpenClawPluginDefinition = definePluginEntry({
   id: OMNIROUTE_PROVIDER_ID,
@@ -66,6 +67,8 @@ const plugin: OpenClawPluginDefinition = definePluginEntry({
       buildReplayPolicy: buildOmniRouteReplayPolicy,
       resolveThinkingProfile: buildOmniRouteThinkingProfile,
       isModernModelRef: () => true,
+      resolveUsageAuth: resolveOmniRouteUsageAuth,
+      fetchUsageSnapshot: fetchOmniRouteUsage,
     });
 
     api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);
