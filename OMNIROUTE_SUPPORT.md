@@ -2,7 +2,7 @@
 
 This plugin should eventually expose every OmniRoute capability that has a stable OpenClaw plugin integration point. OmniRoute publishes one OpenAI-compatible gateway at `http://localhost:20128/v1`, plus additional compatibility endpoints for Anthropic, Gemini, Ollama, search, media, files, batches, and provider-specific routes.
 
-OpenClaw's provider plugin guidance says provider plugins own model catalogs, auth, dynamic model resolution, transport/config normalization, tool-schema cleanup, usage reporting, and related provider behavior. The SDK also exposes registration points for embeddings, speech, realtime transcription, image generation, music generation, video generation, web fetch, and web search.
+OpenClaw's provider plugin guidance says provider plugins own model catalogs, auth, dynamic model resolution, transport/config normalization, tool-schema cleanup, usage reporting, and related provider behavior. The SDK also exposes registration points for modality-specific model catalogs, embeddings, speech, media understanding, realtime transcription, image generation, music generation, video generation, web fetch, and web search.
 
 ## Current Scope
 
@@ -16,9 +16,9 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 - Image generation provider: `omniroute`, backed by `POST /v1/images/generations`
 - Current plugin version: `2.1.0`
-- Next planned capability: speech (TTS) through `POST /v1/audio/speech`
+- Next planned capabilities: authenticated modality-specific model catalogs and image edits
 
-The text provider uses OmniRoute's authenticated live model catalog and filters the response to chat-capable rows. `GET /v1/models` is authoritative: preserve its IDs exactly, do not hardcode `auto` or any other combo/default, and do not synthesize a static fallback when discovery is unavailable. The catalog can differ by gateway upstream-provider configuration and API-key permissions. Embeddings and image generation require explicit models from OmniRoute's catalog and likewise never synthesize `auto`.
+The text provider uses OmniRoute's authenticated live model catalog and filters the response to chat-capable rows. `GET /v1/models` is authoritative: preserve its IDs exactly, do not hardcode `auto` or any other combo/default, and do not synthesize a static fallback when discovery is unavailable. The catalog can differ by gateway upstream-provider configuration and API-key permissions. Embeddings and image generation require explicit models and likewise never synthesize `auto`. The current picker catalog is text-only; modality-specific catalog rows for image, video, music, and audio are planned.
 
 Reasoning controls are projected only from returned capability metadata. OpenClaw's off state maps to `reasoning_effort: "none"`; supported non-off levels pass through using the returned effort metadata. OpenClaw continues to own the configured/session default when no level is explicitly selected. Temperature suppression and arbitrary provider-specific flags remain future transport-level work, rather than catalog metadata passed through by this plugin.
 
@@ -29,14 +29,16 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 | OmniRoute endpoint | OpenClaw capability | Status |
 | --- | --- | --- |
 | `GET /v1/models` | Live chat model/combo catalog | ✅ Initial support |
+| `GET /v1/models` | Authenticated image/video/music/audio catalog rows (`registerModelCatalogProvider`) | 🔜 Planned |
 | `POST /v1/chat/completions` | OpenAI-compatible chat provider | ✅ Initial support |
 | `POST /v1/embeddings` | Embedding provider | ✅ Initial support |
 | `POST /v1/images/generations` | Image generation provider | ✅ Initial support |
 | `GET /api/usage/om-usage` | Provider usage snapshot (`usageProviders`) | ✅ Initial support when API-key usage visibility is enabled |
-| `POST /v1/images/edits` | Image generation/edit provider | 🔜 Planned (part of ImageGenerationProvider edit capability) |
+| `POST /v1/images/edits` | Image generation/edit provider | 🔜 Next (part of ImageGenerationProvider edit capability) |
 | `GET/POST /v1/search` | Web search provider (`registerWebSearchProvider`) | ✅ Initial support |
+| `POST /v1/web/fetch` | Web fetch provider (`registerWebFetchProvider`) | 🔜 Planned |
 | `POST /v1/audio/speech` | Speech provider (`registerSpeechProvider`) | 🔜 Planned |
-| `POST /v1/audio/transcriptions` | Realtime transcription provider (`registerRealtimeTranscriptionProvider`) | 🔜 Planned |
+| `POST /v1/audio/transcriptions` | Batch audio transcription (`registerMediaUnderstandingProvider`) | 🔜 Planned — not a realtime endpoint |
 | `POST /v1/videos/generations` | Video generation provider (`registerVideoGenerationProvider`) | ✅ Initial support |
 | `POST /v1/music/generations` | Music generation provider (`registerMusicGenerationProvider`) | 🔜 Planned |
 | `POST /v1/responses` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
@@ -54,14 +56,16 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 1. Keep live catalog handling aligned with OmniRoute's authenticated `GET /v1/models` response: preserve IDs exactly, include untyped chat/combo/provider rows, honor `supported_endpoints`, avoid synthesizing models, and scope cached discovery to the effective credential and auth profile.
 2. Keep the packaged catalog audit aligned with discovery semantics so it exposes advertised fields, invalid rows, duplicate IDs, and relevant metadata gaps without defaults or credentials.
 3. Project reasoning controls only from returned capability metadata. Normalize supported effort tiers conservatively; map an explicit off selection to `reasoning_effort: "none"`; do not infer temperature support or arbitrary provider-specific flags.
-4. Keep embedding model handling explicit: filter `GET /v1/models` to embedding-capable rows, preserve ids exactly, include dimensionality in runtime/cache identity when OpenClaw provides it, and fail clearly when no embedding model is configured.
-5. Keep image generation explicit and generation-only for the first cut: filter `GET /v1/models` to image-capable rows, preserve ids exactly, pass size/count through to `/v1/images/generations`, and reject reference images until edits are implemented.
-6. ~~Add web search support~~ ✅ Done: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
+4. Add authenticated modality-specific catalog rows through `registerModelCatalogProvider`, beginning with image/video/music and adding audio when the model metadata supports reliable classification. Preserve model IDs and provider-reported capability data; do not create fallback media models.
+5. Keep embedding model handling explicit: filter `GET /v1/models` to embedding-capable rows, preserve ids exactly, include dimensionality in runtime/cache identity when OpenClaw provides it, and fail clearly when no embedding model is configured.
+6. Keep image generation explicit and generation-only for the first cut: filter `GET /v1/models` to image-capable rows, preserve ids exactly, pass size/count through to `/v1/images/generations`, and reject reference images until edits are implemented.
 7. Add image edits: extend the existing `ImageGenerationProvider` to support the `edit` capability, mapping to OmniRoute's `/v1/images/edits`.
-8. Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.
-9. Add transcription (STT): register via `registerRealtimeTranscriptionProvider`, mapping to OmniRoute's `POST /v1/audio/transcriptions`.
-10. ~~Add video generation~~ ✅ Done: register via `registerVideoGenerationProvider`, mapping to OmniRoute's `POST /v1/videos/generations`.
-11. Add music generation: register via `registerMusicGenerationProvider`, mapping to OmniRoute's `POST /v1/music/generations`.
+8. ~~Add web search support~~ ✅ Done: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
+9. Add batch transcription (STT): register via `registerMediaUnderstandingProvider`, mapping to OmniRoute's multipart `POST /v1/audio/transcriptions`. Do not label or implement it as realtime transcription without a supported streaming endpoint.
+10. Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.
+11. Add web fetch: register via `registerWebFetchProvider`, mapping to OmniRoute's `POST /v1/web/fetch`.
+12. ~~Add video generation~~ ✅ Done: register via `registerVideoGenerationProvider`, mapping to OmniRoute's `POST /v1/videos/generations`.
+13. Add music generation: register via `registerMusicGenerationProvider`, mapping to OmniRoute's `POST /v1/music/generations`.
 
 ### Upstream OpenClaw PRs needed (no plugin surface yet)
 

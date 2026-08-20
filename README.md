@@ -147,12 +147,14 @@ The plugin currently exposes OmniRoute as an OpenAI-compatible chat provider. Th
 |---|---|
 | Chat completions (`/v1/chat/completions`) | ✅ Initial support |
 | Live model catalog (`GET /v1/models`) | ✅ Initial support |
+| Modality-specific model catalogs (`GET /v1/models`) | 🔜 Planned — publish authenticated image, video, music, and audio rows for OpenClaw pickers |
 | Embeddings (`/v1/embeddings`) | ✅ Initial support |
 | Image generation (`/v1/images/generations`) | ✅ Initial support |
-| Image edits (`/v1/images/edits`) | 🔜 Planned (part of ImageGenerationProvider) |
+| Image edits (`/v1/images/edits`) | 🔜 Next — extend the existing ImageGenerationProvider edit mode |
 | Web search (`/v1/search`) | ✅ Initial support |
-| Speech (`/v1/audio/speech`) | 🔜 Planned |
-| Transcription (`/v1/audio/transcriptions`) | 🔜 Planned |
+| Web fetch (`/v1/web/fetch`) | 🔜 Planned |
+| Speech (`/v1/audio/speech`) | 🔜 Planned — text-to-speech provider |
+| Batch transcription (`/v1/audio/transcriptions`) | 🔜 Planned — media-understanding audio transcription, not realtime transcription |
 | Video generation (`/v1/videos/generations`) | ✅ Initial support |
 | Music generation (`/v1/music/generations`) | 🔜 Planned |
 
