@@ -1,6 +1,6 @@
 # OmniRoute Provider Plugin for OpenClaw
 
-Registers [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — a multi-provider model routing proxy — as a first-class text inference, embedding, image generation, video generation, and web search provider in OpenClaw. Routes through models from 236+ providers with automatic fallback, live model discovery, and OpenAI-compatible transport.
+Registers [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — a multi-provider model routing proxy — as a first-class text inference, embedding, image generation, video generation, and web search provider in [OpenClaw](https://github.com/openclaw/openclaw). Install the plugin from [ClawHub](https://clawhub.ai/ekinnee/plugins/omniroute-provider). Routes through models from 236+ providers with automatic fallback, live model discovery, and OpenAI-compatible transport.
 
 ## Quick Start
 
