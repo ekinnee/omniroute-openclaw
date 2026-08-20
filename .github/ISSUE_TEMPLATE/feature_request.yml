@@ -1,0 +1,43 @@
+name: Feature request
+description: Propose a focused OmniRoute capability for the OpenClaw provider plugin.
+title: "feat: "
+labels:
+  - feature
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Start with the capability and the user outcome. Avoid including API keys or private deployment details.
+  - type: input
+    id: capability
+    attributes:
+      label: Requested capability
+      placeholder: "Image edits through the OpenClaw image-generation provider"
+    validations:
+      required: true
+  - type: textarea
+    id: problem
+    attributes:
+      label: User need
+      description: Explain the outcome this enables and why existing plugin behavior is insufficient.
+    validations:
+      required: true
+  - type: input
+    id: api-surface
+    attributes:
+      label: Proposed OmniRoute and OpenClaw API surface
+      description: Name the verified OmniRoute endpoint and OpenClaw provider contract, if known.
+      placeholder: "POST /v1/images/edits; registerImageGenerationProvider edit mode"
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: List observable behaviors and boundaries that prove the request is complete.
+      placeholder: |
+        - ...
+        - ...
+    validations:
+      required: true
