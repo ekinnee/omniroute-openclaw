@@ -8,6 +8,10 @@ Registers [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — a multi-pro
 # Install from ClawHub
 openclaw plugins install clawhub:@ekinnee/omniroute-provider
 
+# If OmniRoute runs remotely, point the plugin at its reachable `/v1` endpoint.
+# Skip this when OmniRoute runs on the same host at the default address.
+openclaw config set models.providers.omniroute.baseUrl "https://omniroute.example.com/v1"
+
 # Set your OmniRoute API key
 export OMNIROUTE_API_KEY="your-key-here"
 
@@ -15,7 +19,7 @@ export OMNIROUTE_API_KEY="your-key-here"
 openclaw models list | grep omniroute
 ```
 
-OmniRoute appears as a model provider after authenticated discovery. Select any chat-capable model or combo returned by your OmniRoute gateway; the available list depends on that gateway's configured upstream providers and API-key permissions.
+OmniRoute appears as a model provider after authenticated discovery. The gateway URL is `models.providers.omniroute.baseUrl`; its default, `http://localhost:20128/v1`, works only when OmniRoute runs on the same host. Select any chat-capable model or combo returned by your OmniRoute gateway; the available list depends on that gateway's configured upstream providers and API-key permissions.
 
 ## Upgrading to 2.0.0
 
@@ -34,21 +38,21 @@ After upgrading, authenticate to OmniRoute and run `openclaw models list` to ref
 
 ### OpenClaw Config
 
-Override the base URL in your OpenClaw config:
+Set the OmniRoute gateway URL in your OpenClaw config. Include the `/v1` path; this is the canonical setting for every plugin capability.
 
 ```json5
 {
   models: {
     providers: {
       omniroute: {
-        baseUrl: "http://localhost:20128/v1",
+        baseUrl: "https://omniroute.example.com/v1",
       },
     },
   },
 }
 ```
 
-This is useful for Docker, remote, or cloud-hosted OmniRoute instances.
+For a LAN-hosted gateway, substitute its reachable host and port. `OMNIROUTE_BASE_URL` remains available as an environment fallback, but `models.providers.omniroute.baseUrl` is the durable configuration option.
 
 ### Catalog Metadata Audit
 
