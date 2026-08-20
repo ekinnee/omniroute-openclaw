@@ -133,6 +133,7 @@ The web search tool supports `query`, `count` (1-10), `freshness` (day/week/mont
 6. **Configured embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint and require a configured embedding model.
 7. **Configured image generation** — Image requests use OmniRoute's OpenAI-compatible `POST /v1/images/generations` endpoint with a configured image model.
 8. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
+9. **Provider quota usage** — OpenClaw status and usage views can read OmniRoute's credential-scoped cached quota snapshot from `GET /api/usage/om-usage`. Enable usage visibility for that OmniRoute API key; a key without that permission reports an explicit unavailable status and never exposes other gateway connections.
 
 Temperature suppression and arbitrary provider-specific request flags are not inferred from catalog rows. They require future transport-level support and validation.
 

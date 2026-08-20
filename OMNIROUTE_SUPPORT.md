@@ -12,6 +12,7 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Text model API: `openai-completions`
 - Live chat model discovery: `GET /v1/models`
 - Read-only catalog metadata audit: `omniroute-catalog-audit`
+- Provider quota usage: `GET /api/usage/om-usage`, scoped to the configured API key and its permitted connections
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 - Image generation provider: `omniroute`, backed by `POST /v1/images/generations`
 - Current plugin version: `2.1.0`
@@ -31,6 +32,7 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 | `POST /v1/chat/completions` | OpenAI-compatible chat provider | ✅ Initial support |
 | `POST /v1/embeddings` | Embedding provider | ✅ Initial support |
 | `POST /v1/images/generations` | Image generation provider | ✅ Initial support |
+| `GET /api/usage/om-usage` | Provider usage snapshot (`usageProviders`) | ✅ Initial support when API-key usage visibility is enabled |
 | `POST /v1/images/edits` | Image generation/edit provider | 🔜 Planned (part of ImageGenerationProvider edit capability) |
 | `GET/POST /v1/search` | Web search provider (`registerWebSearchProvider`) | ✅ Initial support |
 | `POST /v1/audio/speech` | Speech provider (`registerSpeechProvider`) | 🔜 Planned |
