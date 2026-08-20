@@ -1,0 +1,11 @@
+documentation:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "README.md"
+          - "OMNIROUTE_SUPPORT.md"
+          - "LICENSE"
+          - "docs/**"
+
+ci:
+  - changed-files:
+      - any-glob-to-any-file: ".github/**"

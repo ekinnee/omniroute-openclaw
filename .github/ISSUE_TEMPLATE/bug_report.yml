@@ -1,0 +1,59 @@
+name: Bug report
+description: Report an OmniRoute provider plugin behavior that is not working as expected.
+title: "bug: "
+labels:
+  - bug
+  - needs-triage
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Please remove secrets, API keys, and private prompts before submitting.
+  - type: input
+    id: plugin-version
+    attributes:
+      label: OmniRoute plugin version
+      description: Include the installed ClawHub/package version or commit.
+      placeholder: "2.1.0"
+    validations:
+      required: true
+  - type: input
+    id: openclaw-version
+    attributes:
+      label: OpenClaw gateway version
+      description: Output from `openclaw --version` or the Gateway status view.
+      placeholder: "2026.8.1"
+    validations:
+      required: true
+  - type: input
+    id: base-url
+    attributes:
+      label: OmniRoute base URL
+      description: Redact tokens and private hostnames if necessary.
+      placeholder: "http://localhost:20128/v1"
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Reproduction steps
+      description: Include the selected provider/model and the smallest reliable reproduction.
+      placeholder: |
+        1. Configure ...
+        2. Select ...
+        3. Send ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and sanitized logs
+      description: Include exact errors, request IDs, and screenshots when available. Do not include credentials.
+    validations:
+      required: true

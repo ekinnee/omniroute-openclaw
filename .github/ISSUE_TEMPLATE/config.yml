@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Plugin documentation
+    url: https://github.com/ekinnee/omniroute-openclaw#readme
+    about: Check installation, configuration, and supported capability guidance.
+  - name: Provider capability roadmap
+    url: https://github.com/ekinnee/omniroute-openclaw/blob/main/OMNIROUTE_SUPPORT.md
+    about: Review planned OmniRoute and OpenClaw integration work before opening a feature request.

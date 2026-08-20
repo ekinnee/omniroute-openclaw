@@ -1,0 +1,25 @@
+name: Workflow Lint
+
+on:
+  pull_request:
+    paths:
+      - ".github/**"
+  push:
+    branches: [main]
+    paths:
+      - ".github/**"
+
+permissions:
+  contents: read
+
+jobs:
+  actionlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install actionlint
+        run: go install github.com/rhysd/actionlint/cmd/actionlint@v1.7.9
+      - name: Lint GitHub Actions workflows
+        run: |
+          actionlint_path="$(go env GOPATH)/bin/actionlint"
+          "$actionlint_path" -color
