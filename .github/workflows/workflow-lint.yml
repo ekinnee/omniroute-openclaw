@@ -22,4 +22,4 @@ jobs:
       - name: Lint GitHub Actions workflows
         run: |
           actionlint_path="$(go env GOPATH)/bin/actionlint"
-          "$actionlint_path" -color -ignore 'SC2016'
+          "$actionlint_path" -color

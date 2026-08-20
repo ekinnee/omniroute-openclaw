@@ -29,6 +29,8 @@ jobs:
       - name: Verify release tag matches package version
         if: github.event_name == 'release'
         run: |
+          # Keep Node template expressions out of the shell.
+          # shellcheck disable=SC2016
           node -e 'const { version } = require("./package.json"); const expected = `v${version}`; if (process.env.GITHUB_REF_NAME !== expected) { throw new Error(`Release tag ${process.env.GITHUB_REF_NAME} does not match ${expected}`); }'
       - run: pnpm pack
       - uses: actions/upload-artifact@v4
