@@ -1,8 +1,8 @@
 // OmniRoute provider plugin tests — standalone compatible
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { readFileSync, existsSync, readdirSync } from "node:fs";
-import { resolve, dirname, join } from "node:path";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { readFileSync, existsSync } from "node:fs";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIN_OPENCLAW_VERSION = "2026.7.1";
@@ -13,6 +13,7 @@ const REQUIRED_OPENCLAW_SDK_EXPORTS = [
   "./plugin-sdk/provider-auth",
   "./plugin-sdk/secret-input-runtime",
   "./plugin-sdk/ssrf-runtime",
+  "./plugin-sdk/provider-transport-runtime",
   "./plugin-sdk/provider-usage",
 ] as const;
 
@@ -302,13 +303,13 @@ describe("omniroute provider plugin", () => {
             capabilities: {
               reasoning: true,
               supportsThinking: true,
-              effort_tiers: ["high", "none", "max", "ultra", "high", "invalid", 42],
+              effort_tiers: [" HIGH ", "none", "MAX", "ultra", "high", "invalid", 42],
             },
           },
           {
             id: "provider/canonical-thinking",
             type: "chat",
-            capabilities: { thinking: true },
+            capabilities: { supportsThinking: true },
           },
         ],
       }),
@@ -340,8 +341,157 @@ describe("omniroute provider plugin", () => {
     });
   });
 
+  it("projects and admits only a fetched model's exact reasoning subset end to end", async () => {
+    const [{ fetchOmniRouteChatModels }, plugin, { buildOpenAICompletionsParams }] =
+      await Promise.all([
+        import("./provider-catalog.js"),
+        import("./index.js"),
+        import("openclaw/plugin-sdk/provider-transport-runtime"),
+      ]);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "provider/subset-thinking",
+            type: "chat",
+            context_length: 42_000,
+            max_output_tokens: 3_000,
+            input_modalities: ["text", "image"],
+            capabilities: {
+              reasoning: true,
+              supportsThinking: true,
+              effort_tiers: ["none", "low", "medium", "xhigh"],
+              tool_calling: true,
+              vision: true,
+            },
+          },
+        ],
+      }),
+    } as never);
+
+    const [model] = await fetchOmniRouteChatModels({ baseUrl: "http://localhost:20128/v1" });
+
+    expect(model).toMatchObject({
+      id: "provider/subset-thinking",
+      reasoning: true,
+      input: ["text", "image"],
+      contextWindow: 42_000,
+      maxTokens: 3_000,
+      compat: {
+        supportsReasoningEffort: true,
+        supportedReasoningEfforts: ["none", "low", "medium", "xhigh"],
+        supportsUsageInStreaming: true,
+        supportsTools: true,
+      },
+      thinkingLevelMap: {
+        off: "none",
+        minimal: null,
+        low: "low",
+        medium: "medium",
+        high: null,
+        xhigh: "xhigh",
+        max: null,
+      },
+    });
+
+    const registerProvider = vi.fn();
+    plugin.default.register({
+      registerProvider,
+      registerEmbeddingProvider: vi.fn(),
+      registerImageGenerationProvider: vi.fn(),
+      registerWebSearchProvider: vi.fn(),
+      registerVideoGenerationProvider: vi.fn(),
+    } as never);
+    const resolveThinkingProfile = registerProvider.mock.calls[0]?.[0].resolveThinkingProfile;
+    expect(resolveThinkingProfile).toBeTypeOf("function");
+
+    const { id: modelId, ...modelContext } = model;
+    const profile = resolveThinkingProfile({
+      provider: "omniroute",
+      modelId,
+      ...modelContext,
+    });
+    expect(profile).toEqual({
+      levels: [{ id: "off" }, { id: "low" }, { id: "medium" }, { id: "xhigh" }],
+    });
+    expect(profile.levels).not.toContainEqual({ id: "high" });
+
+    const transportModel = {
+      ...model,
+      provider: "omniroute",
+      api: "openai-completions",
+      baseUrl: "http://localhost:20128/v1",
+    };
+    const context = { messages: [{ role: "user", content: "hello" }] };
+    const emittedEfforts = profile.levels.map(({ id }: { id: keyof typeof model.thinkingLevelMap }) => {
+      const reasoningEffort = model.thinkingLevelMap?.[id];
+      expect(reasoningEffort).not.toBeNull();
+      return buildOpenAICompletionsParams(transportModel as never, context as never, {
+        reasoningEffort,
+      } as never).reasoning_effort;
+    });
+    expect(emittedEfforts).toEqual(["none", "low", "medium", "xhigh"]);
+    expect(emittedEfforts).not.toContain("high");
+  }, 15_000);
+
+  it("does not fall back when effort tiers are present but unusable", async () => {
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({
+        data: [
+          {
+            id: "provider/empty-tiers",
+            type: "chat",
+            capabilities: { reasoning: true, supportsThinking: true, effort_tiers: [] },
+          },
+          {
+            id: "provider/malformed-tiers",
+            type: "chat",
+            capabilities: { reasoning: true, supportsThinking: true, effort_tiers: "high" },
+          },
+          {
+            id: "provider/unknown-tiers",
+            type: "chat",
+            capabilities: {
+              reasoning: true,
+              supportsThinking: true,
+              effort_tiers: ["ultra", "invalid", 42],
+            },
+          },
+        ],
+      }),
+    } as never);
+
+    const models = await fetchOmniRouteChatModels({ baseUrl: "http://localhost:20128/v1" });
+
+    expect(models.map((model) => model.id)).toEqual([
+      "provider/empty-tiers",
+      "provider/malformed-tiers",
+      "provider/unknown-tiers",
+    ]);
+    for (const model of models) {
+      expect(model.reasoning).toBe(true);
+      expect(model.compat?.supportsReasoningEffort).toBeUndefined();
+      expect(model.compat?.supportedReasoningEfforts).toBeUndefined();
+      expect(model.thinkingLevelMap).toEqual({
+        off: null,
+        minimal: null,
+        low: null,
+        medium: null,
+        high: null,
+        xhigh: null,
+        max: null,
+      });
+    }
+  });
+
   it("projects off and supported tiers through the installed OpenClaw completions transport", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    const { buildOpenAICompletionsParams: buildParams } = await import(
+      "openclaw/plugin-sdk/provider-transport-runtime"
+    );
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
       ok: true,
       json: async () => ({
@@ -361,28 +511,6 @@ describe("omniroute provider plugin", () => {
     const [projectedModel] = await fetchOmniRouteChatModels({
       baseUrl: "http://localhost:20128/v1",
     });
-
-    const pluginEntryPath = fileURLToPath(import.meta.resolve("openclaw/plugin-sdk/plugin-entry"));
-    const openClawDistDir = resolve(dirname(pluginEntryPath), "..");
-    const transportFile = readdirSync(openClawDistDir).find(
-      (file) => file.startsWith("openai-transport-stream-") && file.endsWith(".js"),
-    );
-    expect(transportFile).toBeDefined();
-    const transportPath = join(openClawDistDir, transportFile!);
-    const transportSource = readFileSync(transportPath, "utf8");
-    const exportAlias = transportSource.match(
-      /buildOpenAICompletionsParams as ([A-Za-z_$][\w$]*)/,
-    )?.[1];
-    expect(exportAlias).toBeDefined();
-    const transportModule = (await import(pathToFileURL(transportPath).href)) as Record<
-      string,
-      unknown
-    >;
-    const buildParams = transportModule[exportAlias!] as (
-      model: Record<string, unknown>,
-      context: Record<string, unknown>,
-      options: Record<string, unknown>,
-    ) => Record<string, unknown>;
     expect(buildParams).toBeTypeOf("function");
 
     const model = {
