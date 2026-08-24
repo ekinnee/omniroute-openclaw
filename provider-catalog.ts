@@ -200,16 +200,19 @@ function resolveReasoningCapabilities(entry: OmniRouteModelEntry): {
   reasoning: boolean;
   supportedEfforts: string[];
 } {
+  const capabilities = isRecord(entry.capabilities) ? entry.capabilities : undefined;
   const explicitThinking =
     readCapabilityBoolean(entry, "supportsThinking") ??
     readCapabilityBoolean(entry, "thinking");
-  const explicitEfforts = isRecord(entry.capabilities)
-    ? normalizeReasoningEfforts(entry.capabilities.effort_tiers)
+  const hasEffortTiers =
+    capabilities !== undefined && Object.prototype.hasOwnProperty.call(capabilities, "effort_tiers");
+  const explicitEfforts = hasEffortTiers
+    ? normalizeReasoningEfforts(capabilities.effort_tiers)
     : [];
   const controllable =
     explicitThinking === false ? false : explicitThinking === true || explicitEfforts.length > 0;
   const supportedEfforts = controllable
-    ? explicitEfforts.length > 0
+    ? hasEffortTiers
       ? explicitEfforts
       : [...OMNIROUTE_CANONICAL_EFFORTS]
     : [];
