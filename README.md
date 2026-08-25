@@ -10,7 +10,9 @@ openclaw plugins install clawhub:@ekinnee/omniroute-provider
 
 # If OmniRoute runs remotely, point the plugin at its reachable `/v1` endpoint.
 # Skip this when OmniRoute runs on the same host at the default address.
-openclaw config set models.providers.omniroute.baseUrl "https://omniroute.example.com/v1"
+openclaw config set models.providers.omniroute \
+  '{"api":"openai-completions","baseUrl":"https://omniroute.example.com/v1","models":[]}' \
+  --strict-json
 
 # Set your OmniRoute API key
 export OMNIROUTE_API_KEY="your-key-here"
@@ -45,14 +47,16 @@ Set the OmniRoute gateway URL in your OpenClaw config. Include the `/v1` path; t
   models: {
     providers: {
       omniroute: {
+        api: "openai-completions",
         baseUrl: "https://omniroute.example.com/v1",
+        models: [],
       },
     },
   },
 }
 ```
 
-For a LAN-hosted gateway, substitute its reachable host and port. `OMNIROUTE_BASE_URL` remains available as an environment fallback, but `models.providers.omniroute.baseUrl` is the durable configuration option.
+The empty `models` array is intentional: OpenClaw requires it for an authored custom provider, and the plugin supplies the authenticated live models during discovery. For a LAN-hosted gateway, substitute its reachable host and port. `OMNIROUTE_BASE_URL` remains available as an environment fallback, but `models.providers.omniroute.baseUrl` is the durable configuration option.
 
 ### Catalog Metadata Audit
 
