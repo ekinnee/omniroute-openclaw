@@ -27,6 +27,7 @@ function mockCatalogContext(overrides?: {
   authMode?: string;
   authSource?: string;
   profileId?: string;
+  request?: unknown;
 }) {
   const apiKey = overrides?.apiKey;
   const discoveryApiKey = overrides?.discoveryApiKey ?? apiKey;
@@ -36,6 +37,7 @@ function mockCatalogContext(overrides?: {
         providers: {
           omniroute: {
             baseUrl: overrides?.baseUrl,
+            request: overrides?.request,
           },
         },
       },
@@ -55,6 +57,13 @@ function mockCatalogContext(overrides?: {
       profileId: overrides?.profileId,
     }),
   } as never;
+}
+
+function mockCatalogResponse(payload: unknown, status = 200): Response {
+  return new Response(JSON.stringify(payload), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
 }
 
 describe("omniroute provider plugin", () => {
@@ -155,29 +164,37 @@ describe("omniroute provider plugin", () => {
 
   it("forwards AbortSignal to fetch for chat model discovery", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ id: "if/kimi-k2", type: "chat" }] }),
-    } as never);
     const controller = new AbortController();
+    let requestSignal: AbortSignal | undefined;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async (_input, init) =>
+        await new Promise<Response>((_resolve, reject) => {
+          requestSignal = init?.signal ?? undefined;
+          requestSignal?.addEventListener("abort", () => reject(requestSignal?.reason), {
+            once: true,
+          });
+        }),
+    );
 
-    await fetchOmniRouteChatModels({
+    const discovery = fetchOmniRouteChatModels({
       baseUrl: "http://localhost:20128/v1",
       apiKey: "secret-key",
       signal: controller.signal,
     });
 
+    await vi.waitFor(() => expect(requestSignal).toBeInstanceOf(AbortSignal));
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:20128/v1/models",
-      expect.objectContaining({ signal: controller.signal }),
+      expect.objectContaining({ method: "GET" }),
     );
+    controller.abort();
+    await expect(discovery).rejects.toBeDefined();
   });
 
   it("maps live OmniRoute chat models and filters non-chat models", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
         data: [
           {
             id: "auto",
@@ -208,20 +225,21 @@ describe("omniroute provider plugin", () => {
           },
         ],
       }),
-    } as never);
+    );
 
     const models = await fetchOmniRouteChatModels({
       baseUrl: "http://localhost:20128/v1/",
       apiKey: "secret-key",
     });
 
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:20128/v1/models", {
-      headers: {
-        Accept: "application/json",
-        Authorization: expect.stringMatching(/^Bearer /),
-      },
-      signal: undefined,
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:20128/v1/models",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("Authorization")).toMatch(
+      /^Bearer /,
+    );
     expect(models.map((model) => model.id)).toEqual(["auto", "if/kimi-k2"]);
     expect(models[1]).toMatchObject({
       name: "Kimi K2",
@@ -247,9 +265,8 @@ describe("omniroute provider plugin", () => {
 
   it("does not treat auto or reasoning-only models as controllable thinking models", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
         data: [
           { id: "auto", type: "chat" },
           { id: "provider/reasoning-only", type: "chat", capabilities: { reasoning: true } },
@@ -265,7 +282,7 @@ describe("omniroute provider plugin", () => {
           },
         ],
       }),
-    } as never);
+    );
 
     const models = await fetchOmniRouteChatModels({ baseUrl: "http://localhost:20128/v1" });
 
@@ -295,9 +312,8 @@ describe("omniroute provider plugin", () => {
 
   it("uses explicit thinking effort tiers exactly and canonical tiers only for controllable thinking", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
         data: [
           {
             id: "provider/explicit-tiers",
@@ -315,7 +331,7 @@ describe("omniroute provider plugin", () => {
           },
         ],
       }),
-    } as never);
+    );
 
     const models = await fetchOmniRouteChatModels({ baseUrl: "http://localhost:20128/v1" });
 
@@ -350,9 +366,8 @@ describe("omniroute provider plugin", () => {
         import("./index.js"),
         import("openclaw/plugin-sdk/provider-transport-runtime"),
       ]);
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
         data: [
           {
             id: "provider/subset-thinking",
@@ -370,7 +385,7 @@ describe("omniroute provider plugin", () => {
           },
         ],
       }),
-    } as never);
+    );
 
     const [model] = await fetchOmniRouteChatModels({ baseUrl: "http://localhost:20128/v1" });
 
@@ -439,9 +454,8 @@ describe("omniroute provider plugin", () => {
 
   it("does not fall back when effort tiers are present but unusable", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
         data: [
           {
             id: "provider/empty-tiers",
@@ -464,7 +478,7 @@ describe("omniroute provider plugin", () => {
           },
         ],
       }),
-    } as never);
+    );
 
     const models = await fetchOmniRouteChatModels({ baseUrl: "http://localhost:20128/v1" });
 
@@ -494,9 +508,8 @@ describe("omniroute provider plugin", () => {
     const { buildOpenAICompletionsParams: buildParams } = await import(
       "openclaw/plugin-sdk/provider-transport-runtime"
     );
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
         data: [
           {
             id: "provider/reasoning-wire",
@@ -509,7 +522,7 @@ describe("omniroute provider plugin", () => {
           },
         ],
       }),
-    } as never);
+    );
     const [projectedModel] = await fetchOmniRouteChatModels({
       baseUrl: "http://localhost:20128/v1",
     });
@@ -540,9 +553,8 @@ describe("omniroute provider plugin", () => {
 
   it("uses OmniRoute supported_endpoints as the live chat catalog source of truth", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
         data: [
           {
             id: "auto/best-coding",
@@ -588,7 +600,7 @@ describe("omniroute provider plugin", () => {
           },
         ],
       }),
-    } as never);
+    );
 
     const models = await fetchOmniRouteChatModels({
       baseUrl: "http://localhost:20128/v1",
@@ -613,9 +625,8 @@ describe("omniroute provider plugin", () => {
 
   it("does not synthesize auto when live OmniRoute discovery succeeds without it", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
         data: [
           {
             id: "if/kimi-k2",
@@ -624,7 +635,7 @@ describe("omniroute provider plugin", () => {
           },
         ],
       }),
-    } as never);
+    );
 
     const models = await fetchOmniRouteChatModels({
       baseUrl: "http://localhost:20128/v1",
@@ -635,10 +646,9 @@ describe("omniroute provider plugin", () => {
 
   it("forwards AbortSignal to fetch for embedding model discovery", async () => {
     const { fetchOmniRouteEmbeddingModels } = await import("./provider-catalog.js");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [] }),
-    } as never);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({ data: [] }),
+    );
     const controller = new AbortController();
 
     await fetchOmniRouteEmbeddingModels({
@@ -649,15 +659,16 @@ describe("omniroute provider plugin", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:20128/v1/models",
-      expect.objectContaining({ signal: controller.signal }),
+      expect.objectContaining({ method: "GET" }),
     );
+    const request = fetchMock.mock.calls[0]?.[1];
+    expect(request?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("maps live OmniRoute embedding models without defaulting to auto", async () => {
     const { fetchOmniRouteEmbeddingModels } = await import("./provider-catalog.js");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
         data: [
           {
             id: "auto",
@@ -692,20 +703,21 @@ describe("omniroute provider plugin", () => {
           },
         ],
       }),
-    } as never);
+    );
 
     const models = await fetchOmniRouteEmbeddingModels({
       baseUrl: "http://localhost:20128/v1/",
       apiKey: "secret-key",
     });
 
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:20128/v1/models", {
-      headers: {
-        Accept: "application/json",
-        Authorization: expect.stringMatching(/^Bearer /),
-      },
-      signal: undefined,
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:20128/v1/models",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("Authorization")).toMatch(
+      /^Bearer /,
+    );
     expect(models).toEqual([
       {
         id: "nebius/Qwen/Qwen3-Embedding-8B",
@@ -727,10 +739,9 @@ describe("omniroute provider plugin", () => {
 
   it("forwards AbortSignal to fetch for image model discovery", async () => {
     const { fetchOmniRouteImageModels } = await import("./provider-catalog.js");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [] }),
-    } as never);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({ data: [] }),
+    );
     const controller = new AbortController();
 
     await fetchOmniRouteImageModels({
@@ -741,15 +752,16 @@ describe("omniroute provider plugin", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:20128/v1/models",
-      expect.objectContaining({ signal: controller.signal }),
+      expect.objectContaining({ method: "GET" }),
     );
+    const request = fetchMock.mock.calls[0]?.[1];
+    expect(request?.signal).toBeInstanceOf(AbortSignal);
   });
 
   it("maps live OmniRoute image models without defaulting to auto", async () => {
     const { fetchOmniRouteImageModels } = await import("./provider-catalog.js");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
         data: [
           {
             id: "auto",
@@ -784,20 +796,21 @@ describe("omniroute provider plugin", () => {
           },
         ],
       }),
-    } as never);
+    );
 
     const models = await fetchOmniRouteImageModels({
       baseUrl: "http://localhost:20128/v1/",
       apiKey: "secret-key",
     });
 
-    expect(fetchMock).toHaveBeenCalledWith("http://localhost:20128/v1/models", {
-      headers: {
-        Accept: "application/json",
-        Authorization: expect.stringMatching(/^Bearer /),
-      },
-      signal: undefined,
-    });
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:20128/v1/models",
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(fetchMock.mock.calls[0]?.[1]?.signal).toBeInstanceOf(AbortSignal);
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("Authorization")).toMatch(
+      /^Bearer /,
+    );
     expect(models).toEqual([
       {
         id: "openai/gpt-image-2",
@@ -816,11 +829,9 @@ describe("omniroute provider plugin", () => {
 
   it("does not fabricate a static auto model when live discovery fails", async () => {
     const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: false,
-      status: 401,
-      text: async () => "secret-key should not be read into errors",
-    } as never);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("secret-key should not be read into errors", { status: 401 }),
+    );
 
     const catalog = await buildOmniRouteCatalog(
       mockCatalogContext({
@@ -832,22 +843,129 @@ describe("omniroute provider plugin", () => {
     expect(catalog).toBeNull();
   });
 
+  it("applies configured request headers and alternate auth to live catalog discovery", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({ data: [{ id: "provider/guarded", type: "chat" }] }),
+    );
+
+    const provider = await buildLiveOmniRouteProvider(
+      mockCatalogContext({
+        baseUrl: "https://guarded-discovery.example/v1",
+        apiKey: "discovery-key",
+        request: {
+          allowPrivateNetwork: true,
+          headers: { "X-Trace": "catalog-trace" },
+          auth: {
+            mode: "header",
+            headerName: "X-Gateway-Token",
+            prefix: "Token ",
+            value: "request-secret",
+          },
+        },
+      }),
+    );
+
+    expect(provider?.models).toMatchObject([{ id: "provider/guarded" }]);
+    const request = fetchMock.mock.calls[0]?.[1];
+    const headers = new Headers(request?.headers);
+    expect(request).toMatchObject({ method: "GET", redirect: "manual" });
+    expect(headers.get("Accept")).toBe("application/json");
+    expect(headers.get("X-Trace")).toBe("catalog-trace");
+    expect(headers.get("X-Gateway-Token")).toBe("Token request-secret");
+    expect(headers.get("Authorization")).toBeNull();
+  });
+
+  it("does not reach a private discovery endpoint when its configured policy denies it", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+    await expect(
+      buildLiveOmniRouteProvider(
+        mockCatalogContext({
+          baseUrl: "http://10.0.0.5:1234/v1",
+          apiKey: "private-discovery-key",
+          request: { allowPrivateNetwork: false },
+        }),
+      ),
+    ).resolves.toBeNull();
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Blocked hostname"));
+  });
+
+  it("bounds oversized live catalog responses before parsing them", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(new Uint8Array(4 * 1024 * 1024 + 1), { status: 200 }),
+    );
+
+    await expect(
+      buildLiveOmniRouteProvider(
+        mockCatalogContext({
+          baseUrl: "https://oversized-discovery.example/v1",
+          apiKey: "oversized-discovery-key",
+        }),
+      ),
+    ).resolves.toBeNull();
+
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("response exceeded 4194304 bytes (4194305 bytes received)"),
+    );
+  });
+
+  it("cancels a stalled bounded JSON body", async () => {
+    const { readOmniRouteJson } = await import("./http.js");
+    let cancelled = false;
+    const body = new ReadableStream<Uint8Array>({
+      start: () => undefined,
+      cancel: () => {
+        cancelled = true;
+      },
+    });
+
+    await expect(
+      readOmniRouteJson(new Response(body), "OmniRoute live model catalog", {
+        maxBytes: 64,
+        chunkTimeoutMs: 1,
+      }),
+    ).rejects.toThrow("response stalled: no data received for 1ms");
+    expect(cancelled).toBe(true);
+  });
+
+  it("redacts configured and reflected URLs from discovery failure logs", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    const sensitiveUrl = "https://user:secret@gateway.example/v1?token=secret#fragment";
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new Error(`request failed at ${sensitiveUrl}`),
+    );
+
+    await expect(
+      buildLiveOmniRouteProvider(
+        mockCatalogContext({ baseUrl: sensitiveUrl, apiKey: "discovery-secret" }),
+      ),
+    ).resolves.toBeNull();
+
+    const rendered = String(warnSpy.mock.calls[0]?.[0]);
+    expect(rendered).toContain("https://gateway.example/v1");
+    expect(rendered).not.toContain("user");
+    expect(rendered).not.toContain("secret");
+    expect(rendered).not.toContain("token");
+    expect(rendered).not.toContain("fragment");
+  });
+
   it("isolates the live catalog cache by auth profile and effective discovery credential", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [{ id: "provider/key-one", type: "chat" }] }),
-      } as never)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [{ id: "provider/key-two", type: "chat" }] }),
-      } as never)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [{ id: "provider/profile-two", type: "chat" }] }),
-      } as never);
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ id: "provider/key-one", type: "chat" }] }))
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ id: "provider/key-two", type: "chat" }] }))
+      .mockResolvedValueOnce(
+        mockCatalogResponse({ data: [{ id: "provider/profile-two", type: "chat" }] }),
+      );
     const baseUrl = "http://credential-isolation.example/v1";
 
     const first = await buildLiveOmniRouteProvider(
@@ -866,12 +984,70 @@ describe("omniroute provider plugin", () => {
     expect(fetchMock).toHaveBeenCalledTimes(3);
   });
 
+  it("isolates the live catalog cache by effective request policy", async () => {
+    const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ id: "provider/request-one", type: "chat" }] }))
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ id: "provider/request-two", type: "chat" }] }))
+      .mockResolvedValueOnce(
+        mockCatalogResponse({ data: [{ id: "provider/request-private", type: "chat" }] }),
+      );
+    const baseUrl = "https://request-policy-cache.example/v1";
+    const first = await buildLiveOmniRouteProvider(
+      mockCatalogContext({
+        baseUrl,
+        apiKey: "shared-discovery-key",
+        request: {
+          auth: {
+            mode: "header",
+            headerName: "X-Gateway-Token",
+            value: "request-token-one",
+          },
+        },
+      }),
+    );
+    const authChanged = await buildLiveOmniRouteProvider(
+      mockCatalogContext({
+        baseUrl,
+        apiKey: "shared-discovery-key",
+        request: {
+          auth: {
+            mode: "header",
+            headerName: "X-Gateway-Token",
+            value: "request-token-two",
+          },
+        },
+      }),
+    );
+    const privateNetworkPolicyChanged = await buildLiveOmniRouteProvider(
+      mockCatalogContext({
+        baseUrl,
+        apiKey: "shared-discovery-key",
+        request: {
+          allowPrivateNetwork: true,
+          auth: {
+            mode: "header",
+            headerName: "X-Gateway-Token",
+            value: "request-token-two",
+          },
+        },
+      }),
+    );
+
+    expect(first?.models.map((model) => model.id)).toEqual(["provider/request-one"]);
+    expect(authChanged?.models.map((model) => model.id)).toEqual(["provider/request-two"]);
+    expect(privateNetworkPolicyChanged?.models.map((model) => model.id)).toEqual([
+      "provider/request-private",
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(3);
+  });
+
   it("uses the discovery credential for catalog fetches without replacing the runtime credential", async () => {
     const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ id: "provider/discovery-key", type: "chat" }] }),
-    } as never);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({ data: [{ id: "provider/discovery-key", type: "chat" }] }),
+    );
     const context = mockCatalogContext({
       baseUrl: "http://discovery-key.example/v1",
       apiKey: "runtime-credential-marker",
@@ -890,9 +1066,10 @@ describe("omniroute provider plugin", () => {
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "http://discovery-key.example/v1/models",
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: "Bearer discovery-secret" }),
-      }),
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("Authorization")).toBe(
+      "Bearer discovery-secret",
     );
   });
 
@@ -923,10 +1100,9 @@ describe("omniroute provider plugin", () => {
 
   it("uses the provider API-key resolver when auth has no configured credential", async () => {
     const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
-    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ id: "provider/configured-key", type: "chat" }] }),
-    } as never);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({ data: [{ id: "provider/configured-key", type: "chat" }] }),
+    );
 
     const catalog = await buildOmniRouteCatalog(
       mockCatalogContext({
@@ -944,9 +1120,10 @@ describe("omniroute provider plugin", () => {
     });
     expect(fetchMock).toHaveBeenCalledWith(
       "http://configured-key.example/v1/models",
-      expect.objectContaining({
-        headers: expect.objectContaining({ Authorization: "Bearer configured-discovery-secret" }),
-      }),
+      expect.objectContaining({ method: "GET" }),
+    );
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get("Authorization")).toBe(
+      "Bearer configured-discovery-secret",
     );
   });
 
@@ -969,14 +1146,8 @@ describe("omniroute provider plugin", () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [] }),
-      } as never)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [{ id: "recovered-model", type: "chat" }] }),
-      } as never);
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [] }))
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ id: "recovered-model", type: "chat" }] }));
     const context = mockCatalogContext({
       baseUrl: "http://empty-catalog-cache.example/v1",
       apiKey: "secret-key",
@@ -1000,10 +1171,9 @@ describe("omniroute provider plugin", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockReturnValueOnce(expiredResponse)
-      .mockResolvedValueOnce({
-        ok: true,
-        json: async () => ({ data: [{ id: "replacement-model", type: "chat" }] }),
-      } as never);
+      .mockResolvedValueOnce(
+        mockCatalogResponse({ data: [{ id: "replacement-model", type: "chat" }] }),
+      );
     const context = mockCatalogContext({
       baseUrl: "http://expired-cache-race.example/v1",
       apiKey: "secret-key",
@@ -1026,10 +1196,9 @@ describe("omniroute provider plugin", () => {
 
   it("uses OMNIROUTE_BASE_URL when no config base URL is set", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ id: "provider/env-url", type: "chat" }] }),
-    } as never);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({ data: [{ id: "provider/env-url", type: "chat" }] }),
+    );
 
     const catalog = await buildLiveOmniRouteProvider(
       mockCatalogContext({
@@ -1043,10 +1212,9 @@ describe("omniroute provider plugin", () => {
 
   it("uses OMNIROUTE_BASE_URL when config only has the default base URL", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ id: "provider/env-url", type: "chat" }] }),
-    } as never);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({ data: [{ id: "provider/env-url", type: "chat" }] }),
+    );
 
     const catalog = await buildLiveOmniRouteProvider(
       mockCatalogContext({
@@ -1061,10 +1229,9 @@ describe("omniroute provider plugin", () => {
 
   it("keeps the environment-resolved base URL in the returned catalog provider", async () => {
     const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ id: "provider/env-url", type: "chat" }] }),
-    } as never);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({ data: [{ id: "provider/env-url", type: "chat" }] }),
+    );
 
     const catalog = await buildOmniRouteCatalog(
       mockCatalogContext({
@@ -1081,10 +1248,9 @@ describe("omniroute provider plugin", () => {
 
   it("prefers config base URL over OMNIROUTE_BASE_URL", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
-    vi.spyOn(globalThis, "fetch").mockResolvedValue({
-      ok: true,
-      json: async () => ({ data: [{ id: "provider/config-url", type: "chat" }] }),
-    } as never);
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({ data: [{ id: "provider/config-url", type: "chat" }] }),
+    );
 
     const catalog = await buildLiveOmniRouteProvider(
       mockCatalogContext({

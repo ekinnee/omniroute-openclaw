@@ -1,9 +1,12 @@
 import { createHash } from "node:crypto";
 import { OMNIROUTE_DEFAULT_BASE_URL, } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
-import { resolveOmniRouteBaseUrl } from "./base-url.js";
+import { redactOmniRouteBaseUrl, resolveOmniRouteBaseUrl } from "./base-url.js";
+import { assertOmniRouteOk, getOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 const liveCatalogCache = new Map();
 const LIVE_CATALOG_TTL_MS = 30_000;
+const LIVE_CATALOG_BODY_MAX_BYTES = 4 * 1024 * 1024;
+const LIVE_CATALOG_TIMEOUT_MS = 5_000;
 function deleteLiveCatalogCacheEntryIfCurrent(key, entry) {
     if (liveCatalogCache.get(key) === entry) {
         liveCatalogCache.delete(key);
@@ -80,11 +83,6 @@ function readPositiveNumber(...values) {
     }
     return undefined;
 }
-function normalizeBaseUrl(value) {
-    return typeof value === "string" && value.trim().length > 0
-        ? value.trim().replace(/\/+$/, "")
-        : OMNIROUTE_DEFAULT_BASE_URL;
-}
 function hasCapability(entry, key) {
     if (!isRecord(entry.capabilities)) {
         return false;
@@ -134,6 +132,26 @@ function fingerprintCredential(apiKey) {
     return apiKey
         ? createHash("sha256").update(apiKey).digest("hex")
         : "none";
+}
+function fingerprintLiveCatalogRequest(request) {
+    return createHash("sha256")
+        .update(JSON.stringify({
+        headers: Array.from(request.headers.entries()).sort(([leftName, leftValue], [rightName, rightValue]) => leftName.localeCompare(rightName) || leftValue.localeCompare(rightValue)),
+        ssrfPolicy: request.ssrfPolicy,
+        dispatcherPolicy: request.dispatcherPolicy,
+    }))
+        .digest("hex");
+}
+function resolveOmniRouteCatalogHttpRequest(params) {
+    return resolveOmniRouteHttpRequestConfig({
+        baseUrl: params.baseUrl,
+        defaultBaseUrl: OMNIROUTE_DEFAULT_BASE_URL,
+        request: params.request,
+        defaultHeaders: {
+            Accept: "application/json",
+            ...(params.apiKey ? { Authorization: `Bearer ${params.apiKey}` } : {}),
+        },
+    });
 }
 function normalizeStringArray(value) {
     if (!Array.isArray(value)) {
@@ -265,20 +283,7 @@ export function buildOmniRouteImageModelFromCatalogEntry(entry) {
         inputModalities: normalizeTrimmedStringArray(entry.input_modalities),
     };
 }
-// Generic fetch helper
-async function fetchOmniRouteModels(params, builder, errorLabel) {
-    const headers = { Accept: "application/json" };
-    if (params.apiKey) {
-        headers.Authorization = `Bearer ${params.apiKey}`;
-    }
-    const response = await fetch(`${normalizeBaseUrl(params.baseUrl)}/models`, {
-        headers,
-        signal: params.signal,
-    });
-    if (!response.ok) {
-        throw new Error(`OmniRoute ${errorLabel} model catalog request failed with HTTP ${response.status}`);
-    }
-    const payload = (await response.json());
+function buildOmniRouteModels(payload, builder) {
     if (!Array.isArray(payload.data)) {
         throw new Error("OmniRoute model catalog response did not include a data array");
     }
@@ -295,7 +300,27 @@ async function fetchOmniRouteModels(params, builder, errorLabel) {
     }
     return models;
 }
-// Simplified functions using generic helper
+async function fetchOmniRouteModels(params, builder, errorLabel) {
+    const http = params.http ?? resolveOmniRouteCatalogHttpRequest(params);
+    const { response, release } = await getOmniRouteJson({
+        url: `${http.baseUrl}/models`,
+        headers: http.headers,
+        signal: params.signal,
+        timeoutMs: LIVE_CATALOG_TIMEOUT_MS,
+        ssrfPolicy: http.ssrfPolicy,
+        dispatcherPolicy: http.dispatcherPolicy,
+    });
+    try {
+        await assertOmniRouteOk(response, `OmniRoute ${errorLabel} model catalog`);
+        return buildOmniRouteModels((await readOmniRouteJson(response, `OmniRoute ${errorLabel} model catalog`, {
+            maxBytes: LIVE_CATALOG_BODY_MAX_BYTES,
+            chunkTimeoutMs: LIVE_CATALOG_TIMEOUT_MS,
+        })), builder);
+    }
+    finally {
+        await release();
+    }
+}
 export async function fetchOmniRouteChatModels(params) {
     return fetchOmniRouteModels(params, buildOmniRouteModelFromCatalogEntry, "chat");
 }
@@ -304,6 +329,11 @@ export async function fetchOmniRouteEmbeddingModels(params) {
 }
 export async function fetchOmniRouteImageModels(params) {
     return fetchOmniRouteModels(params, buildOmniRouteImageModelFromCatalogEntry, "image");
+}
+function redactLiveDiscoveryError(error) {
+    return error instanceof Error
+        ? error.message.replace(/[a-z][a-z\d+.-]*:\/\/[^\s"'<>]+/giu, redactOmniRouteBaseUrl)
+        : "unknown error";
 }
 export function resolveOmniRouteCatalogCredentials(params) {
     // The host's lightweight catalog resolver currently selects profile entries
@@ -329,6 +359,7 @@ export function resolveOmniRouteCatalogCredentials(params) {
 }
 export async function buildLiveOmniRouteProvider(ctx) {
     const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config, env: ctx.env });
+    const request = ctx.config.models?.providers?.omniroute?.request;
     const auth = ctx.resolveProviderAuth("omniroute");
     try {
         const credentialsOrPromise = resolveOmniRouteCatalogCredentials({
@@ -345,6 +376,11 @@ export async function buildLiveOmniRouteProvider(ctx) {
             return null;
         }
         const { runtimeApiKey, discoveryApiKey } = credentials;
+        const http = resolveOmniRouteCatalogHttpRequest({
+            baseUrl,
+            apiKey: discoveryApiKey,
+            request,
+        });
         const models = await getCachedLiveCatalogValue({
             key: JSON.stringify([
                 "omniroute",
@@ -354,11 +390,13 @@ export async function buildLiveOmniRouteProvider(ctx) {
                 auth.source,
                 auth.profileId ?? "none",
                 fingerprintCredential(discoveryApiKey),
+                fingerprintLiveCatalogRequest(http),
             ]),
-            load: () => fetchOmniRouteChatModels({
+            load: () => fetchOmniRouteModels({
                 baseUrl,
                 apiKey: discoveryApiKey,
-            }),
+                http,
+            }, buildOmniRouteModelFromCatalogEntry, "chat"),
             shouldCache: (resolved) => resolved.length > 0,
         });
         if (models.length === 0) {
@@ -372,7 +410,7 @@ export async function buildLiveOmniRouteProvider(ctx) {
         };
     }
     catch (err) {
-        console.warn(`[omniroute] Live model discovery failed (${baseUrl}): ${err instanceof Error ? err.message : String(err)}`);
+        console.warn(`[omniroute] Live model discovery failed (${redactOmniRouteBaseUrl(baseUrl)}): ${redactLiveDiscoveryError(err)}`);
         return null;
     }
 }

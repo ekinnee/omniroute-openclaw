@@ -44,16 +44,19 @@ export declare function fetchOmniRouteChatModels(params: {
     baseUrl: string;
     apiKey?: string;
     signal?: AbortSignal;
+    request?: unknown;
 }): Promise<OmniRouteModelDefinition[]>;
 export declare function fetchOmniRouteEmbeddingModels(params: {
     baseUrl: string;
     apiKey?: string;
     signal?: AbortSignal;
+    request?: unknown;
 }): Promise<OmniRouteEmbeddingModel[]>;
 export declare function fetchOmniRouteImageModels(params: {
     baseUrl: string;
     apiKey?: string;
     signal?: AbortSignal;
+    request?: unknown;
 }): Promise<OmniRouteImageModel[]>;
 type OmniRouteCatalogCredentials = {
     runtimeApiKey: string;

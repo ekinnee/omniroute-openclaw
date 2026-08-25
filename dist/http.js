@@ -144,7 +144,75 @@ export async function getOmniRouteJson(params) {
     });
     return { response, release };
 }
-export async function readOmniRouteJson(response, operation) {
+async function readOmniRouteJsonBytes(response, operation, maxBytes, chunkTimeoutMs) {
+    if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
+        throw new RangeError(`OmniRoute JSON maxBytes must be a non-negative safe integer: ${maxBytes}`);
+    }
+    const reader = response.body?.getReader();
+    if (!reader) {
+        return new Uint8Array();
+    }
+    const chunks = [];
+    let size = 0;
+    const readChunk = () => {
+        if (chunkTimeoutMs === undefined) {
+            return reader.read();
+        }
+        return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => {
+                const error = new Error(`${operation} response stalled: no data received for ${chunkTimeoutMs}ms`);
+                void reader.cancel(error).catch(() => undefined);
+                reject(error);
+            }, chunkTimeoutMs);
+            void reader.read().then((result) => {
+                clearTimeout(timeout);
+                resolve(result);
+            }, (error) => {
+                clearTimeout(timeout);
+                reject(error);
+            });
+        });
+    };
+    try {
+        for (;;) {
+            const { done, value } = await readChunk();
+            if (done) {
+                break;
+            }
+            size += value?.byteLength ?? 0;
+            if (size > maxBytes) {
+                void reader.cancel().catch(() => undefined);
+                throw new Error(`${operation} response exceeded ${maxBytes} bytes (${size} bytes received)`);
+            }
+            if (value?.byteLength) {
+                chunks.push(value);
+            }
+        }
+    }
+    finally {
+        try {
+            reader.releaseLock();
+        }
+        catch { }
+    }
+    const bytes = new Uint8Array(size);
+    let offset = 0;
+    for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.byteLength;
+    }
+    return bytes;
+}
+export async function readOmniRouteJson(response, operation, options) {
+    if (options?.maxBytes !== undefined) {
+        const bytes = await readOmniRouteJsonBytes(response, operation, options.maxBytes, options.chunkTimeoutMs);
+        try {
+            return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
+        }
+        catch {
+            throw new Error(`${operation} returned invalid JSON`);
+        }
+    }
     try {
         return await response.json();
     }

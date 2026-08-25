@@ -8,6 +8,20 @@ export function normalizeOmniRouteBaseUrl(value) {
         ? value.trim().replace(/\/+$/, "")
         : OMNIROUTE_DEFAULT_BASE_URL;
 }
+/** Removes credentials, query strings, and fragments before an endpoint is rendered. */
+export function redactOmniRouteBaseUrl(value) {
+    try {
+        const url = new URL(value);
+        url.username = "";
+        url.password = "";
+        url.search = "";
+        url.hash = "";
+        return url.toString().replace(/\/$/, "");
+    }
+    catch {
+        return "[invalid base URL]";
+    }
+}
 export function resolveOmniRouteBaseUrl(params) {
     // Memory search's remote endpoint is deliberately more specific than the
     // provider-wide endpoint. Preserve its current override semantics first.

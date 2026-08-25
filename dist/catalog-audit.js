@@ -1,7 +1,7 @@
 import { resolveOmniRouteApiKey } from "./auth.js";
 import { assertOmniRouteOk, getOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
-import { resolveOmniRouteBaseUrl } from "./base-url.js";
+import { redactOmniRouteBaseUrl, resolveOmniRouteBaseUrl } from "./base-url.js";
 const ADVERTISED_MODEL_FIELDS = [
     "type",
     "supported_endpoints",
@@ -38,17 +38,7 @@ export function resolveOmniRouteAuditBaseUrl(params) {
 }
 /** Removes credentials, query strings, and fragments before an endpoint is rendered. */
 export function redactOmniRouteAuditUrl(value) {
-    try {
-        const url = new URL(value);
-        url.username = "";
-        url.password = "";
-        url.search = "";
-        url.hash = "";
-        return url.toString().replace(/\/$/, "");
-    }
-    catch {
-        return "[invalid base URL]";
-    }
+    return redactOmniRouteBaseUrl(value);
 }
 function copyAdvertisedFields(entry) {
     const advertised = {};
