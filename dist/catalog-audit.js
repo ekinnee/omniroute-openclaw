@@ -1,6 +1,7 @@
 import { resolveOmniRouteApiKey } from "./auth.js";
 import { assertOmniRouteOk, getOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
-import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
+import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 const ADVERTISED_MODEL_FIELDS = [
     "type",
     "supported_endpoints",
@@ -28,21 +29,12 @@ const ADVERTISED_CAPABILITY_FIELDS = [
 function isRecord(value) {
     return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function normalizeBaseUrl(value) {
-    return typeof value === "string" && value.trim()
-        ? value.trim().replace(/\/+$/, "")
-        : OMNIROUTE_DEFAULT_BASE_URL;
-}
 function readProviderConfig(config) {
     return config?.models?.providers?.[OMNIROUTE_PROVIDER_ID];
 }
-/** Mirrors the catalog provider's configured-base-url-over-environment precedence. */
+/** Uses the shared provider endpoint precedence without mutating configuration. */
 export function resolveOmniRouteAuditBaseUrl(params) {
-    const configuredBaseUrl = normalizeBaseUrl(readProviderConfig(params.config)?.baseUrl);
-    if (configuredBaseUrl !== OMNIROUTE_DEFAULT_BASE_URL) {
-        return configuredBaseUrl;
-    }
-    return normalizeBaseUrl((params.env ?? process.env)[OMNIROUTE_BASE_URL_ENV_VAR] ?? configuredBaseUrl);
+    return resolveOmniRouteBaseUrl(params);
 }
 /** Removes credentials, query strings, and fragments before an endpoint is rendered. */
 export function redactOmniRouteAuditUrl(value) {

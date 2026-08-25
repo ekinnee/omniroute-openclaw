@@ -12,6 +12,7 @@ import {
   OMNIROUTE_LABEL,
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 
 type VideoGenerationProvider = Parameters<OpenClawPluginApi["registerVideoGenerationProvider"]>[0];
 type VideoGenerationRequest = Parameters<VideoGenerationProvider["generateVideo"]>[0];
@@ -32,10 +33,7 @@ function requireVideoModel(model: string): string {
 }
 
 function resolveConfiguredBaseUrl(req: VideoGenerationRequest): string {
-  const configured = req.cfg.models?.providers?.[OMNIROUTE_PROVIDER_ID]?.baseUrl;
-  return typeof configured === "string" && configured.trim()
-    ? configured.trim().replace(/\/+$/, "")
-    : OMNIROUTE_DEFAULT_BASE_URL;
+  return resolveOmniRouteBaseUrl({ config: req.cfg });
 }
 
 function parseVideoResponse(payload: unknown): GeneratedVideoAsset[] {

@@ -1,6 +1,7 @@
 import { isOmniRouteConfigured, resolveOmniRouteApiKey, } from "./auth.js";
 import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 const DEFAULT_IMAGE_SIZE = "1024x1024";
 const MAX_IMAGE_COUNT = 4;
 function requireImageModel(model) {
@@ -17,10 +18,7 @@ function resolveImageCount(count) {
     return Math.max(1, Math.min(MAX_IMAGE_COUNT, Math.trunc(count)));
 }
 function resolveConfiguredBaseUrl(req) {
-    const configured = req.cfg.models?.providers?.[OMNIROUTE_PROVIDER_ID]?.baseUrl;
-    return typeof configured === "string" && configured.trim()
-        ? configured.trim().replace(/\/+$/, "")
-        : OMNIROUTE_DEFAULT_BASE_URL;
+    return resolveOmniRouteBaseUrl({ config: req.cfg });
 }
 function sniffMimeType(buffer) {
     if (buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {

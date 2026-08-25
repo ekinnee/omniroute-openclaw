@@ -8,6 +8,7 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 
 - Provider id: `omniroute`
 - Default base URL: `http://localhost:20128/v1`
+- Base URL precedence: an embedding `remote.baseUrl` override wins for that memory integration; otherwise an explicit non-default `models.providers.omniroute.baseUrl` wins, followed by `OMNIROUTE_BASE_URL`, then the localhost default. The same provider-wide rule applies to discovery, chat, image/video generation, web search, usage, and the catalog audit.
 - Auth: API key through `OMNIROUTE_API_KEY`
 - Text model API: `openai-completions`
 - Live chat model discovery: `GET /v1/models`
@@ -81,6 +82,6 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 - Embeddings deliberately do not default to `auto`. The selected model and requested dimensionality are part of vector index identity; routing an embedding request to a model with different dimensions can invalidate existing indexes or fail at query time.
 - Image generation deliberately does not default to `auto`. The selected model must be image-capable, and the first implementation supports text-to-image only.
 - OmniRoute's `/v1/models` includes chat, embedding, image, rerank, audio, moderation, video, music, and combo rows. The current text provider filters that source to chat-capable rows, the embedding provider filters it to embedding-capable rows, and the image generation provider filters it to image-capable rows; future capability providers must filter the same source by their own endpoint capability.
-- Base URL overrides should continue to work for local, remote, Docker, and cloud-hosted OmniRoute instances.
+- Base URL precedence should remain consistent for local, remote, Docker, and cloud-hosted OmniRoute instances.
 - Live discovery should be auth-gated and cached by normalized base URL, auth profile, and a non-reversible fingerprint of the effective discovery credential. There is no static model fallback for offline picker surfaces.
 - The plugin composes its companion capability providers (embeddings, image generation, web search, video generation) through the `register` hook of `definePluginEntry`. Future capabilities with existing SDK registration points (speech, transcription, music generation) can register the same way; a different entry helper is only worth revisiting if a future capability requires custom registration flow.

@@ -1,6 +1,7 @@
 import { normalizeResolvedSecretInputString } from "openclaw/plugin-sdk/secret-input-runtime";
 import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 function requireEmbeddingModel(model) {
     const normalized = model.trim();
@@ -13,10 +14,10 @@ function readProviderConfig(options) {
     return options.config.models?.providers?.[OMNIROUTE_PROVIDER_ID];
 }
 function readBaseUrl(options) {
-    const configured = options.remote?.baseUrl ?? readProviderConfig(options)?.baseUrl;
-    return typeof configured === "string" && configured.trim()
-        ? configured.trim().replace(/\/+$/, "")
-        : OMNIROUTE_DEFAULT_BASE_URL;
+    return resolveOmniRouteBaseUrl({
+        config: options.config,
+        overrideBaseUrl: options.remote?.baseUrl,
+    });
 }
 function readRemoteApiKey(options) {
     return normalizeResolvedSecretInputString({

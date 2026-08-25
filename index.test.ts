@@ -60,6 +60,7 @@ function mockCatalogContext(overrides?: {
 describe("omniroute provider plugin", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.unstubAllEnvs();
   });
 
   it("has a valid package.json", () => {
@@ -90,6 +91,7 @@ describe("omniroute provider plugin", () => {
     const runtimeFiles = [
       "index.ts",
       "models.ts",
+      "base-url.ts",
       "onboard.ts",
       "provider-catalog.ts",
       "catalog-audit.ts",
@@ -1057,6 +1059,26 @@ describe("omniroute provider plugin", () => {
     expect(catalog?.baseUrl).toBe("http://env-omniroute.example/v1");
   });
 
+  it("keeps the environment-resolved base URL in the returned catalog provider", async () => {
+    const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: [{ id: "provider/env-url", type: "chat" }] }),
+    } as never);
+
+    const catalog = await buildOmniRouteCatalog(
+      mockCatalogContext({
+        baseUrl: "http://localhost:20128/v1",
+        envBaseUrl: "https://env-omniroute.example/v1/",
+        apiKey: "secret-key",
+      }),
+    );
+
+    expect(catalog).toMatchObject({
+      provider: { baseUrl: "https://env-omniroute.example/v1" },
+    });
+  });
+
   it("prefers config base URL over OMNIROUTE_BASE_URL", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue({
@@ -1073,6 +1095,30 @@ describe("omniroute provider plugin", () => {
     );
 
     expect(catalog?.baseUrl).toBe("http://config-omniroute.example/v1");
+  });
+
+  it("applies the shared base URL precedence rule", async () => {
+    const { resolveOmniRouteBaseUrl } = await import("./base-url.js");
+
+    expect(
+      resolveOmniRouteBaseUrl({
+        config: { models: { providers: { omniroute: { baseUrl: "http://localhost:20128/v1" } } } },
+        env: { OMNIROUTE_BASE_URL: "https://environment.example/v1/" },
+      }),
+    ).toBe("https://environment.example/v1");
+    expect(
+      resolveOmniRouteBaseUrl({
+        config: { models: { providers: { omniroute: { baseUrl: "https://configured.example/v1/" } } } },
+        env: { OMNIROUTE_BASE_URL: "https://environment.example/v1" },
+      }),
+    ).toBe("https://configured.example/v1");
+    expect(
+      resolveOmniRouteBaseUrl({
+        config: { models: { providers: { omniroute: { baseUrl: "https://configured.example/v1" } } } },
+        env: { OMNIROUTE_BASE_URL: "https://environment.example/v1" },
+        overrideBaseUrl: "https://memory.example/v1/",
+      }),
+    ).toBe("https://memory.example/v1");
   });
 
   it("applies config without errors", async () => {
@@ -1221,7 +1267,7 @@ describe("omniroute provider plugin", () => {
     expect(imageProvider).not.toHaveProperty("defaultModel");
   });
 
-  it("creates an OmniRoute embedding provider through the guarded public HTTP path", async () => {
+  it("uses OMNIROUTE_BASE_URL for embeddings when provider config has the default URL", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1, 0.2] }] }), {
         status: 200,
@@ -1229,6 +1275,7 @@ describe("omniroute provider plugin", () => {
       }),
     );
     const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    vi.stubEnv("OMNIROUTE_BASE_URL", "https://env-omniroute.example/v1/");
     const config = {
       models: {
         providers: {
@@ -1258,13 +1305,14 @@ describe("omniroute provider plugin", () => {
       id: "omniroute",
       cacheKeyData: {
         provider: "omniroute",
+        baseUrl: "https://env-omniroute.example/v1",
         model: "nebius/Qwen/Qwen3-Embedding-8B",
         dimensions: 4096,
       },
     });
     expect(vector).toEqual([0.1, 0.2]);
     expect(fetchMock).toHaveBeenCalledWith(
-      "http://localhost:20128/v1/embeddings",
+      "https://env-omniroute.example/v1/embeddings",
       expect.objectContaining({ method: "POST" }),
     );
     const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
@@ -1542,6 +1590,28 @@ describe("omniroute provider plugin", () => {
     });
   });
 
+  it("keeps a per-memory embedding base URL ahead of OMNIROUTE_BASE_URL", async () => {
+    vi.stubEnv("OMNIROUTE_BASE_URL", "https://env-omniroute.example/v1");
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+
+    expect(
+      omniRouteEmbeddingProviderAdapter.resolveIndexIdentity?.({
+        config: {
+          models: {
+            providers: {
+              omniroute: { baseUrl: "http://localhost:20128/v1" },
+            },
+          },
+        } as never,
+        remote: { baseUrl: "https://memory-omniroute.example/v1/" },
+        model: "openai/text-embedding-3-small",
+        dimensions: 1536,
+      }),
+    ).toMatchObject({
+      cacheKeyData: { baseUrl: "https://memory-omniroute.example/v1" },
+    });
+  });
+
   it("generates OmniRoute images with an explicit model", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({
@@ -1596,6 +1666,107 @@ describe("omniroute provider plugin", () => {
       mimeType: "image/png",
       fileName: "omniroute-image-1.png",
     });
+  });
+
+  it("uses OMNIROUTE_BASE_URL for image generation when provider config has the default URL", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        data: [{ b64_json: Buffer.from("generated image").toString("base64") }],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubEnv("OMNIROUTE_BASE_URL", "https://env-omniroute.example/v1/");
+    const { buildOmniRouteImageGenerationProvider } = await import(
+      "./image-generation-provider.js"
+    );
+
+    await buildOmniRouteImageGenerationProvider().generateImage({
+      provider: "omniroute",
+      model: "openai/gpt-image-2",
+      prompt: "a schematic city",
+      cfg: {
+        models: {
+          providers: {
+            omniroute: {
+              apiKey: "secret-key",
+              baseUrl: "http://localhost:20128/v1",
+            },
+          },
+        },
+      } as never,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://env-omniroute.example/v1/images/generations",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("uses OMNIROUTE_BASE_URL for video generation when provider config has the default URL", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        data: [{ url: "https://cdn.example/video.mp4" }],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubEnv("OMNIROUTE_BASE_URL", "https://env-omniroute.example/v1/");
+    const { buildOmniRouteVideoGenerationProvider } = await import(
+      "./video-generation-provider.js"
+    );
+
+    await buildOmniRouteVideoGenerationProvider().generateVideo({
+      provider: "omniroute",
+      model: "video-model",
+      prompt: "a city at night",
+      cfg: {
+        models: {
+          providers: {
+            omniroute: {
+              apiKey: "secret-key",
+              baseUrl: "http://localhost:20128/v1",
+            },
+          },
+        },
+      } as never,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://env-omniroute.example/v1/videos/generations",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("uses OMNIROUTE_BASE_URL for web search when provider config has the default URL", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ results: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubEnv("OMNIROUTE_BASE_URL", "https://env-omniroute.example/v1/");
+    const { createOmniRouteWebSearchProvider } = await import("./web-search-provider.js");
+    const provider = createOmniRouteWebSearchProvider();
+    const tool = provider.createTool({
+      config: {
+        models: {
+          providers: {
+            omniroute: { baseUrl: "http://localhost:20128/v1" },
+          },
+        },
+      },
+      searchConfig: { apiKey: "secret-key" },
+    } as never);
+
+    await tool.execute({ query: "OmniRoute" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://env-omniroute.example/v1/search",
+      expect.objectContaining({ method: "POST" }),
+    );
   });
 
   it("requires an explicit OmniRoute image model", async () => {

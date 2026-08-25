@@ -4,11 +4,11 @@ import type {
   ProviderCatalogResult,
 } from "openclaw/plugin-sdk/plugin-entry";
 import {
-  OMNIROUTE_BASE_URL_ENV_VAR,
   type OmniRouteModelDefinition,
   OMNIROUTE_DEFAULT_BASE_URL,
 } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 
 type OmniRouteProviderConfig = {
   baseUrl: string;
@@ -159,18 +159,6 @@ function normalizeBaseUrl(value: unknown): string {
   return typeof value === "string" && value.trim().length > 0
     ? value.trim().replace(/\/+$/, "")
     : OMNIROUTE_DEFAULT_BASE_URL;
-}
-
-function resolveConfiguredBaseUrl(ctx: ProviderCatalogContext): string {
-  const config = ctx.config;
-  const provider = config.models?.providers?.omniroute;
-  const configuredBaseUrl = normalizeBaseUrl(provider?.baseUrl);
-  const envBaseUrl = ctx.env[OMNIROUTE_BASE_URL_ENV_VAR];
-
-  if (configuredBaseUrl !== OMNIROUTE_DEFAULT_BASE_URL) {
-    return configuredBaseUrl;
-  }
-  return normalizeBaseUrl(envBaseUrl ?? configuredBaseUrl);
 }
 
 function hasCapability(entry: OmniRouteModelEntry, key: string): boolean {
@@ -513,7 +501,7 @@ export function resolveOmniRouteCatalogCredentials(params: {
 export async function buildLiveOmniRouteProvider(
   ctx: ProviderCatalogContext,
 ): Promise<OmniRouteProviderConfig | null> {
-  const baseUrl = resolveConfiguredBaseUrl(ctx);
+  const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config, env: ctx.env });
   const auth = ctx.resolveProviderAuth("omniroute");
   try {
     const credentialsOrPromise = resolveOmniRouteCatalogCredentials({
@@ -569,19 +557,11 @@ export async function buildLiveOmniRouteProvider(
 export async function buildOmniRouteCatalog(
   ctx: ProviderCatalogContext,
 ): Promise<ProviderCatalogResult> {
-  const configuredProvider = ctx.config.models?.providers?.omniroute;
-  const configuredBaseUrl =
-    typeof configuredProvider?.baseUrl === "string" && configuredProvider.baseUrl.trim()
-      ? configuredProvider.baseUrl.trim().replace(/\/+$/, "")
-      : undefined;
   const provider = await buildLiveOmniRouteProvider(ctx);
   if (!provider) {
     return null;
   }
   return {
-    provider: {
-      ...provider,
-      ...(configuredBaseUrl ? { baseUrl: configuredBaseUrl } : {}),
-    },
+    provider,
   };
 }
