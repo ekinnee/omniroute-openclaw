@@ -17,6 +17,20 @@ export function normalizeOmniRouteBaseUrl(value: unknown): string {
     : OMNIROUTE_DEFAULT_BASE_URL;
 }
 
+/** Removes credentials, query strings, and fragments before an endpoint is rendered. */
+export function redactOmniRouteBaseUrl(value: string): string {
+  try {
+    const url = new URL(value);
+    url.username = "";
+    url.password = "";
+    url.search = "";
+    url.hash = "";
+    return url.toString().replace(/\/$/, "");
+  } catch {
+    return "[invalid base URL]";
+  }
+}
+
 export function resolveOmniRouteBaseUrl(params: {
   config?: unknown;
   env?: Record<string, string | undefined>;

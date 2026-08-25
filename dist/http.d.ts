@@ -46,7 +46,11 @@ export declare function getOmniRouteJson(params: {
     response: Response;
     release: () => Promise<void>;
 }>;
-export declare function readOmniRouteJson(response: Response, operation: string): Promise<unknown>;
+export type OmniRouteJsonReadOptions = {
+    maxBytes?: number;
+    chunkTimeoutMs?: number;
+};
+export declare function readOmniRouteJson(response: Response, operation: string, options?: OmniRouteJsonReadOptions): Promise<unknown>;
 export declare function assertOmniRouteOk(response: Response, operation: string): Promise<void>;
 export {};
 //# sourceMappingURL=http.d.ts.map

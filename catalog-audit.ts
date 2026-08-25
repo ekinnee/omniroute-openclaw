@@ -11,7 +11,7 @@ import {
   OMNIROUTE_DEFAULT_BASE_URL,
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
-import { resolveOmniRouteBaseUrl } from "./base-url.js";
+import { redactOmniRouteBaseUrl, resolveOmniRouteBaseUrl } from "./base-url.js";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -79,16 +79,7 @@ export function resolveOmniRouteAuditBaseUrl(params: {
 
 /** Removes credentials, query strings, and fragments before an endpoint is rendered. */
 export function redactOmniRouteAuditUrl(value: string): string {
-  try {
-    const url = new URL(value);
-    url.username = "";
-    url.password = "";
-    url.search = "";
-    url.hash = "";
-    return url.toString().replace(/\/$/, "");
-  } catch {
-    return "[invalid base URL]";
-  }
+  return redactOmniRouteBaseUrl(value);
 }
 
 function copyAdvertisedFields(entry: JsonRecord): Partial<Record<(typeof ADVERTISED_MODEL_FIELDS)[number], unknown>> {
