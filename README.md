@@ -21,7 +21,7 @@ export OMNIROUTE_API_KEY="your-key-here"
 openclaw models list | grep omniroute
 ```
 
-OmniRoute appears as a model provider after authenticated discovery. The gateway URL is `models.providers.omniroute.baseUrl`; its default, `http://localhost:20128/v1`, works only when OmniRoute runs on the same host. Select any chat-capable model or combo returned by your OmniRoute gateway; the available list depends on that gateway's configured upstream providers and API-key permissions.
+OmniRoute appears as a model provider after authenticated discovery. The gateway URL is `models.providers.omniroute.baseUrl`; its default, `http://localhost:20128/v1`, works only when OmniRoute runs on the same host. For discovery, chat, embeddings, image and video generation, web search, usage, and the catalog audit, an explicit non-default provider URL wins; otherwise `OMNIROUTE_BASE_URL` is used before the localhost default. Select any chat-capable model or combo returned by your OmniRoute gateway; the available list depends on that gateway's configured upstream providers and API-key permissions.
 
 ## Upgrading to 2.0.0
 
@@ -56,7 +56,7 @@ Set the OmniRoute gateway URL in your OpenClaw config. Include the `/v1` path; t
 }
 ```
 
-The empty `models` array is intentional: OpenClaw requires it for an authored custom provider, and the plugin supplies the authenticated live models during discovery. For a LAN-hosted gateway, substitute its reachable host and port. `OMNIROUTE_BASE_URL` remains available as an environment fallback, but `models.providers.omniroute.baseUrl` is the durable configuration option.
+The empty `models` array is intentional: OpenClaw requires it for an authored custom provider, and the plugin supplies the authenticated live models during discovery. For a LAN-hosted gateway, substitute its reachable host and port. `models.providers.omniroute.baseUrl` is the durable configuration option; `OMNIROUTE_BASE_URL` is the fallback when that setting is absent or still the public localhost default.
 
 ### Catalog Metadata Audit
 

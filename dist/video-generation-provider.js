@@ -1,6 +1,7 @@
 import { isOmniRouteConfigured, resolveOmniRouteApiKey } from "./auth.js";
 import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 const MAX_VIDEO_COUNT = 1;
 const DEFAULT_TIMEOUT_MS = 300_000;
 function requireVideoModel(model) {
@@ -11,10 +12,7 @@ function requireVideoModel(model) {
     return normalized;
 }
 function resolveConfiguredBaseUrl(req) {
-    const configured = req.cfg.models?.providers?.[OMNIROUTE_PROVIDER_ID]?.baseUrl;
-    return typeof configured === "string" && configured.trim()
-        ? configured.trim().replace(/\/+$/, "")
-        : OMNIROUTE_DEFAULT_BASE_URL;
+    return resolveOmniRouteBaseUrl({ config: req.cfg });
 }
 function parseVideoResponse(payload) {
     if (!payload || typeof payload !== "object" || !Array.isArray(payload.data)) {

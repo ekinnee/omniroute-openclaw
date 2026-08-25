@@ -1,5 +1,6 @@
 import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 const MAX_SEARCH_COUNT = 10;
 const DEFAULT_SEARCH_COUNT = 5;
 function resolveSearchCount(value) {
@@ -36,10 +37,7 @@ export function createOmniRouteWebSearchProvider() {
                 process.env[OMNIROUTE_API_KEY_ENV_VAR] ??
                 "";
             const providerConfig = ctx.config?.models?.providers?.[OMNIROUTE_PROVIDER_ID];
-            const configuredBaseUrl = providerConfig?.baseUrl;
-            const baseUrl = typeof configuredBaseUrl === "string" && configuredBaseUrl.trim()
-                ? configuredBaseUrl.trim().replace(/\/+$/, "")
-                : OMNIROUTE_DEFAULT_BASE_URL;
+            const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config });
             const http = resolveOmniRouteHttpRequestConfig({
                 baseUrl,
                 defaultBaseUrl: OMNIROUTE_DEFAULT_BASE_URL,

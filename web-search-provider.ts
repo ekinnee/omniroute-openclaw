@@ -13,6 +13,7 @@ import {
   OMNIROUTE_LABEL,
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 
 type WebSearchProviderPlugin = Parameters<OpenClawPluginApi["registerWebSearchProvider"]>[0];
 
@@ -56,10 +57,7 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
         "";
 
       const providerConfig = ctx.config?.models?.providers?.[OMNIROUTE_PROVIDER_ID];
-      const configuredBaseUrl = providerConfig?.baseUrl;
-      const baseUrl = typeof configuredBaseUrl === "string" && configuredBaseUrl.trim()
-        ? configuredBaseUrl.trim().replace(/\/+$/, "")
-        : OMNIROUTE_DEFAULT_BASE_URL;
+      const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config });
       const http = resolveOmniRouteHttpRequestConfig({
         baseUrl,
         defaultBaseUrl: OMNIROUTE_DEFAULT_BASE_URL,

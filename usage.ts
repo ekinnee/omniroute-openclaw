@@ -6,35 +6,25 @@ import type {
 import type { ProviderUsageSnapshot } from "openclaw/plugin-sdk/provider-usage";
 import {
   OMNIROUTE_API_KEY_ENV_VAR,
-  OMNIROUTE_BASE_URL_ENV_VAR,
-  OMNIROUTE_DEFAULT_BASE_URL,
   OMNIROUTE_LABEL,
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
+import {
+  normalizeOmniRouteBaseUrl,
+  resolveOmniRouteBaseUrl,
+} from "./base-url.js";
 
 const MAX_USAGE_RESPONSE_CHARS = 32_768;
-
-function normalizeBaseUrl(value: unknown): string {
-  return typeof value === "string" && value.trim()
-    ? value.trim().replace(/\/+$/, "")
-    : OMNIROUTE_DEFAULT_BASE_URL;
-}
 
 function resolveUsageBaseUrl(ctx: {
   config: ProviderFetchUsageSnapshotContext["config"];
   env: NodeJS.ProcessEnv;
 }): string {
-  const configuredBaseUrl = normalizeBaseUrl(
-    ctx.config.models?.providers?.[OMNIROUTE_PROVIDER_ID]?.baseUrl,
-  );
-  if (configuredBaseUrl !== OMNIROUTE_DEFAULT_BASE_URL) {
-    return configuredBaseUrl;
-  }
-  return normalizeBaseUrl(ctx.env[OMNIROUTE_BASE_URL_ENV_VAR] ?? configuredBaseUrl);
+  return resolveOmniRouteBaseUrl({ config: ctx.config, env: ctx.env });
 }
 
 export function omniRouteUsageUrl(baseUrl: string): string {
-  const url = new URL(normalizeBaseUrl(baseUrl));
+  const url = new URL(normalizeOmniRouteBaseUrl(baseUrl));
   url.pathname = `${url.pathname.replace(/\/v1$/, "").replace(/\/$/, "")}/api/usage/om-usage`;
   url.search = "";
   url.hash = "";

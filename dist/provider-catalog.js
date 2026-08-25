@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, } from "./models.js";
+import { OMNIROUTE_DEFAULT_BASE_URL, } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 const liveCatalogCache = new Map();
 const LIVE_CATALOG_TTL_MS = 30_000;
 function deleteLiveCatalogCacheEntryIfCurrent(key, entry) {
@@ -83,16 +84,6 @@ function normalizeBaseUrl(value) {
     return typeof value === "string" && value.trim().length > 0
         ? value.trim().replace(/\/+$/, "")
         : OMNIROUTE_DEFAULT_BASE_URL;
-}
-function resolveConfiguredBaseUrl(ctx) {
-    const config = ctx.config;
-    const provider = config.models?.providers?.omniroute;
-    const configuredBaseUrl = normalizeBaseUrl(provider?.baseUrl);
-    const envBaseUrl = ctx.env[OMNIROUTE_BASE_URL_ENV_VAR];
-    if (configuredBaseUrl !== OMNIROUTE_DEFAULT_BASE_URL) {
-        return configuredBaseUrl;
-    }
-    return normalizeBaseUrl(envBaseUrl ?? configuredBaseUrl);
 }
 function hasCapability(entry, key) {
     if (!isRecord(entry.capabilities)) {
@@ -337,7 +328,7 @@ export function resolveOmniRouteCatalogCredentials(params) {
         : null;
 }
 export async function buildLiveOmniRouteProvider(ctx) {
-    const baseUrl = resolveConfiguredBaseUrl(ctx);
+    const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config, env: ctx.env });
     const auth = ctx.resolveProviderAuth("omniroute");
     try {
         const credentialsOrPromise = resolveOmniRouteCatalogCredentials({
@@ -386,19 +377,12 @@ export async function buildLiveOmniRouteProvider(ctx) {
     }
 }
 export async function buildOmniRouteCatalog(ctx) {
-    const configuredProvider = ctx.config.models?.providers?.omniroute;
-    const configuredBaseUrl = typeof configuredProvider?.baseUrl === "string" && configuredProvider.baseUrl.trim()
-        ? configuredProvider.baseUrl.trim().replace(/\/+$/, "")
-        : undefined;
     const provider = await buildLiveOmniRouteProvider(ctx);
     if (!provider) {
         return null;
     }
     return {
-        provider: {
-            ...provider,
-            ...(configuredBaseUrl ? { baseUrl: configuredBaseUrl } : {}),
-        },
+        provider,
     };
 }
 //# sourceMappingURL=provider-catalog.js.map

@@ -15,6 +15,7 @@ import {
   OMNIROUTE_LABEL,
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 
 type ImageGenerationProvider = Parameters<OpenClawPluginApi["registerImageGenerationProvider"]>[0];
 type ImageGenerationRequest = Parameters<ImageGenerationProvider["generateImage"]>[0];
@@ -42,10 +43,7 @@ function resolveImageCount(count: number | undefined): number {
 }
 
 function resolveConfiguredBaseUrl(req: ImageGenerationRequest): string {
-  const configured = req.cfg.models?.providers?.[OMNIROUTE_PROVIDER_ID]?.baseUrl;
-  return typeof configured === "string" && configured.trim()
-    ? configured.trim().replace(/\/+$/, "")
-    : OMNIROUTE_DEFAULT_BASE_URL;
+  return resolveOmniRouteBaseUrl({ config: req.cfg });
 }
 
 function sniffMimeType(buffer: Buffer): { mimeType: string; extension: string } {

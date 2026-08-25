@@ -19,7 +19,7 @@ export type OmniRouteCatalogAuditReport = {
     modelCount: number;
     models: OmniRouteCatalogAuditModel[];
 };
-/** Mirrors the catalog provider's configured-base-url-over-environment precedence. */
+/** Uses the shared provider endpoint precedence without mutating configuration. */
 export declare function resolveOmniRouteAuditBaseUrl(params: {
     config?: OpenClawConfig;
     env?: NodeJS.ProcessEnv;

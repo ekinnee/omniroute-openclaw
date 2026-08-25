@@ -6,6 +6,7 @@ import {
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 import {
   assertOmniRouteOk,
   postOmniRouteJson,
@@ -35,10 +36,10 @@ function readProviderConfig(options: EmbeddingProviderCreateOptions) {
 }
 
 function readBaseUrl(options: EmbeddingProviderCreateOptions): string {
-  const configured = options.remote?.baseUrl ?? readProviderConfig(options)?.baseUrl;
-  return typeof configured === "string" && configured.trim()
-    ? configured.trim().replace(/\/+$/, "")
-    : OMNIROUTE_DEFAULT_BASE_URL;
+  return resolveOmniRouteBaseUrl({
+    config: options.config,
+    overrideBaseUrl: options.remote?.baseUrl,
+  });
 }
 
 function readRemoteApiKey(options: EmbeddingProviderCreateOptions): string | undefined {

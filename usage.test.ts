@@ -19,6 +19,28 @@ describe("OmniRoute usage reporting", () => {
     );
   });
 
+  it("uses OMNIROUTE_BASE_URL when provider config only has the public default", async () => {
+    const fetchFn = vi.fn<typeof fetch>().mockResolvedValue(new Response("Provider quota", { status: 200 }));
+
+    await fetchOmniRouteUsage({
+      config: {
+        models: { providers: { omniroute: { baseUrl: "http://localhost:20128/v1" } } },
+      },
+      env: { OMNIROUTE_BASE_URL: "https://environment.example/v1/" },
+      token: "usage-key",
+      timeoutMs: 5_000,
+      fetchFn,
+    } as never);
+
+    expect(fetchFn).toHaveBeenCalledWith("https://environment.example/api/usage/om-usage", {
+      headers: {
+        Accept: "text/plain",
+        Authorization: "Bearer usage-key",
+      },
+      signal: expect.any(AbortSignal),
+    });
+  });
+
   it("resolves only the configured OmniRoute API key for usage", () => {
     const resolveApiKeyFromConfigAndStore = vi.fn(() => "omniroute-key");
 

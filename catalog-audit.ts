@@ -8,10 +8,10 @@ import {
 } from "./http.js";
 import {
   OMNIROUTE_API_KEY_ENV_VAR,
-  OMNIROUTE_BASE_URL_ENV_VAR,
   OMNIROUTE_DEFAULT_BASE_URL,
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
+import { resolveOmniRouteBaseUrl } from "./base-url.js";
 
 type JsonRecord = Record<string, unknown>;
 
@@ -65,26 +65,16 @@ function isRecord(value: unknown): value is JsonRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function normalizeBaseUrl(value: unknown): string {
-  return typeof value === "string" && value.trim()
-    ? value.trim().replace(/\/+$/, "")
-    : OMNIROUTE_DEFAULT_BASE_URL;
-}
-
 function readProviderConfig(config: OpenClawConfig | undefined) {
   return config?.models?.providers?.[OMNIROUTE_PROVIDER_ID];
 }
 
-/** Mirrors the catalog provider's configured-base-url-over-environment precedence. */
+/** Uses the shared provider endpoint precedence without mutating configuration. */
 export function resolveOmniRouteAuditBaseUrl(params: {
   config?: OpenClawConfig;
   env?: NodeJS.ProcessEnv;
 }): string {
-  const configuredBaseUrl = normalizeBaseUrl(readProviderConfig(params.config)?.baseUrl);
-  if (configuredBaseUrl !== OMNIROUTE_DEFAULT_BASE_URL) {
-    return configuredBaseUrl;
-  }
-  return normalizeBaseUrl((params.env ?? process.env)[OMNIROUTE_BASE_URL_ENV_VAR] ?? configuredBaseUrl);
+  return resolveOmniRouteBaseUrl(params);
 }
 
 /** Removes credentials, query strings, and fragments before an endpoint is rendered. */
