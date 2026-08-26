@@ -16,6 +16,8 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Provider quota usage: `GET /api/usage/om-usage`, scoped to the configured API key and its permitted connections
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 - Image generation provider: `omniroute`, backed by `POST /v1/images/generations`
+- Video generation provider: `omniroute`, backed by `POST /v1/videos/generations`
+- Web search provider: `omniroute`, backed by `GET/POST /v1/search`
 - Current plugin version: `2.1.3`
 - Next planned capabilities: authenticated modality-specific model catalogs and image edits
 
