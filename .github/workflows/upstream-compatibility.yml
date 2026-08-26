@@ -130,10 +130,10 @@ jobs:
           echo "result_path=$result_path" >> "$GITHUB_OUTPUT"
           {
             echo "### OpenClaw compatibility: ${TARGET_ROLE}"
-            echo "- Selector: \\`openclaw@${OPENCLAW_SPEC}\\`"
-            echo "- Resolved version: \\`${EXPECTED_OPENCLAW_VERSION}\\`"
-            echo "- Peer resolution: \\`${PEER_RESOLUTION}\\`"
-            echo "- Plugin tarball SHA-256: \\`${PACKAGE_SHA256}\\`"
+            echo "- Selector: \`openclaw@${OPENCLAW_SPEC}\`"
+            echo "- Resolved version: \`${EXPECTED_OPENCLAW_VERSION}\`"
+            echo "- Peer resolution: \`${PEER_RESOLUTION}\`"
+            echo "- Plugin tarball SHA-256: \`${PACKAGE_SHA256}\`"
             echo "- Probe scope: packed-artifact ABI/public registration (host-install proof is separate)"
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload compatibility evidence
