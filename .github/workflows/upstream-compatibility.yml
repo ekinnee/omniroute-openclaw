@@ -75,7 +75,6 @@ jobs:
           echo "OpenClaw ${OPENCLAW_SPEC} resolves to ${expected_version}"
           echo "expected_version=$expected_version" >> "$GITHUB_OUTPUT"
       - name: Load the packaged plugin and run the public compatibility probe
-        id: probe
         env:
           TARGET_ROLE: ${{ matrix.label }}
           OPENCLAW_SPEC: ${{ matrix.spec }}
@@ -109,25 +108,6 @@ jobs:
           export OPENCLAW_BUILD_VERSION="2026.7.1"
           probe_output="$(node "$GITHUB_WORKSPACE/.github/scripts/upstream-compatibility-probe.mjs" --installed-artifact)"
           printf '%s\n' "$probe_output"
-          result_path="$RUNNER_TEMP/upstream-compatibility-${TARGET_ROLE}.json"
-          PROBE_OUTPUT="$probe_output" RESULT_PATH="$result_path" node --input-type=module <<'NODE'
-          import { writeFileSync } from "node:fs";
-
-          const probe = JSON.parse(process.env.PROBE_OUTPUT);
-          writeFileSync(
-            process.env.RESULT_PATH,
-            `${JSON.stringify({
-              targetRole: process.env.TARGET_ROLE,
-              openClawSpec: process.env.OPENCLAW_SPEC,
-              expectedOpenClawVersion: process.env.EXPECTED_OPENCLAW_VERSION,
-              peerResolution: process.env.PEER_RESOLUTION,
-              packageFilename: process.env.PACKAGE_FILENAME,
-              packageSha256: process.env.PACKAGE_SHA256,
-              probe,
-            }, null, 2)}\n`,
-          );
-          NODE
-          echo "result_path=$result_path" >> "$GITHUB_OUTPUT"
           {
             echo "### OpenClaw compatibility: ${TARGET_ROLE}"
             echo "- Selector: \`openclaw@${OPENCLAW_SPEC}\`"
@@ -136,10 +116,3 @@ jobs:
             echo "- Plugin tarball SHA-256: \`${PACKAGE_SHA256}\`"
             echo "- Probe scope: packed-artifact ABI/public registration (host-install proof is separate)"
           } >> "$GITHUB_STEP_SUMMARY"
-      - name: Upload compatibility evidence
-        if: success()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: upstream-compatibility-${{ matrix.label }}
-          path: ${{ steps.probe.outputs.result_path }}
-          if-no-files-found: error
