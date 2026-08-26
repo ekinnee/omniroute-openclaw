@@ -37,7 +37,7 @@ jobs:
             peerResolution: strict
           - label: latest
             spec: latest
-            peerResolution: alias
+            peerResolution: strict
           - label: beta
             spec: beta
             peerResolution: alias
@@ -94,12 +94,15 @@ jobs:
           if [[ "$PEER_RESOLUTION" == "strict" ]]; then
             peer_flags=()
           else
+            test "$TARGET_ROLE" = "beta"
             peer_flags=(--legacy-peer-deps)
-            echo "The ${TARGET_ROLE} alias is an artifact smoke target; npm peer resolution is legacy because the selected alias may be a semver prerelease."
+            echo "The beta target is an artifact smoke row for a newer prerelease; legacy peer resolution is intentional and is not stable-floor proof."
           fi
-          # The matrix is intentionally a narrow artifact ABI probe. The
-          # release packet separately proves normal OpenClaw host installation.
-          npm install --cache /tmp/omniroute-openclaw-npm-cache --ignore-scripts "${peer_flags[@]}" --no-save "openclaw@${OPENCLAW_SPEC}" "$package_path"
+          # Resolve moving aliases above, then install the exact immutable
+          # version selected for this run with normal peer resolution. The
+          # matrix remains a narrow artifact ABI probe; the release packet
+          # separately proves normal OpenClaw host installation.
+          npm install --cache /tmp/omniroute-openclaw-npm-cache --ignore-scripts "${peer_flags[@]}" --no-save "openclaw@${EXPECTED_OPENCLAW_VERSION}" "$package_path"
           ./node_modules/.bin/omniroute-catalog-audit --help | grep -F "Usage: omniroute-catalog-audit"
           export OPENCLAW_EXPECTED_VERSION="$EXPECTED_OPENCLAW_VERSION"
           export OPENCLAW_BUILD_VERSION="2026.7.1"
@@ -134,7 +137,7 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
       - name: Upload compatibility evidence
         if: success()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: upstream-compatibility-${{ matrix.label }}
           path: ${{ steps.probe.outputs.result_path }}

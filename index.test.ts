@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const MIN_OPENCLAW_VERSION = "2026.7.1";
+const OPENCLAW_PEER_RANGE = `>=${MIN_OPENCLAW_VERSION}-0`;
 const REQUIRED_OPENCLAW_SDK_EXPORTS = [
   "./plugin-sdk/agent-runtime",
   "./plugin-sdk/config-runtime",
@@ -88,8 +89,8 @@ describe("omniroute provider plugin", () => {
       readFileSync(resolve(__dirname, "node_modules/openclaw/package.json"), "utf8"),
     );
 
-    expect(pkg.peerDependencies.openclaw).toBe(`>=${MIN_OPENCLAW_VERSION}`);
-    expect(pkg.openclaw.compat.pluginApi).toBe(`>=${MIN_OPENCLAW_VERSION}`);
+    expect(pkg.peerDependencies.openclaw).toBe(OPENCLAW_PEER_RANGE);
+    expect(pkg.openclaw.compat.pluginApi).toBe(OPENCLAW_PEER_RANGE);
     expect(pkg.openclaw.compat.minGatewayVersion).toBe(MIN_OPENCLAW_VERSION);
     for (const exportPath of REQUIRED_OPENCLAW_SDK_EXPORTS) {
       expect(openClawPkg.exports[exportPath]).toBeDefined();

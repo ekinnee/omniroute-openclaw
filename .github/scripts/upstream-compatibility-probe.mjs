@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const EXPECTED_COMPATIBILITY_FLOOR = "2026.7.1";
+const EXPECTED_PEER_RANGE = `>=${EXPECTED_COMPATIBILITY_FLOOR}-0`;
 const PLUGIN_PACKAGE_NAME = "@ekinnee/omniroute-provider";
 
 function readJson(path) {
@@ -29,7 +30,7 @@ function assertPackageCompatibilityMetadata(packageJson, expectedBuildVersion) {
   const peerRange = packageJson.peerDependencies?.openclaw;
   assertEqual(
     peerRange,
-    `>=${EXPECTED_COMPATIBILITY_FLOOR}`,
+    EXPECTED_PEER_RANGE,
     "peerDependencies.openclaw",
   );
 
