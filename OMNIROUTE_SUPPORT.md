@@ -16,7 +16,7 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Provider quota usage: `GET /api/usage/om-usage`, scoped to the configured API key and its permitted connections
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 - Image generation provider: `omniroute`, backed by `POST /v1/images/generations`
-- Current plugin version: `2.1.0`
+- Current plugin version: `2.1.3`
 - Next planned capabilities: authenticated modality-specific model catalogs and image edits
 
 The text provider uses OmniRoute's authenticated live model catalog and filters the response to chat-capable rows. `GET /v1/models` is authoritative: preserve its IDs exactly, do not hardcode `auto` or any other combo/default, and do not synthesize a static fallback when discovery is unavailable. The catalog can differ by gateway upstream-provider configuration and API-key permissions. Embeddings and image generation require explicit models and likewise never synthesize `auto`. The current picker catalog is text-only; modality-specific catalog rows for image, video, music, and audio are planned.
