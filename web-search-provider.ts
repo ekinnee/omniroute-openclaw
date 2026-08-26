@@ -1,5 +1,5 @@
 // OmniRoute web search provider using public SDK registration contracts.
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
+import type { OpenClawConfig, OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import {
   assertOmniRouteOk,
   postOmniRouteJson,
@@ -14,6 +14,7 @@ import {
   OMNIROUTE_PROVIDER_ID,
 } from "./models.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
+import { resolveOmniRouteApiKey } from "./auth.js";
 
 type WebSearchProviderPlugin = Parameters<OpenClawPluginApi["registerWebSearchProvider"]>[0];
 
@@ -36,37 +37,78 @@ function resolveFreshness(value: string | undefined): string | undefined {
   return undefined;
 }
 
+function readStringCredential(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function isMissingOmniRouteAuthError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const authError = error as {
+    code?: unknown;
+    provider?: unknown;
+  };
+  return authError.provider === OMNIROUTE_PROVIDER_ID &&
+    (authError.code === "missing-provider-auth" || authError.code === "missing-api-key");
+}
+
+async function resolveWebSearchApiKey(params: {
+  config?: OpenClawConfig;
+  agentDir?: string;
+  searchConfig?: Record<string, unknown>;
+  providerApiKey?: unknown;
+}): Promise<string | undefined> {
+  const searchApiKey = readStringCredential(params.searchConfig?.apiKey);
+  const providerApiKey = readStringCredential(params.providerApiKey);
+  const explicitSearchApiKey = searchApiKey && searchApiKey !== providerApiKey
+    ? searchApiKey
+    : undefined;
+  if (explicitSearchApiKey) {
+    return explicitSearchApiKey;
+  }
+
+  try {
+    const resolved = await resolveOmniRouteApiKey({
+      cfg: params.config,
+      agentDir: params.agentDir,
+    });
+    if (resolved) {
+      return resolved;
+    }
+  } catch (error) {
+    if (!isMissingOmniRouteAuthError(error)) {
+      throw error;
+    }
+    // Preserve the provider's documented environment fallback and a stable
+    // non-secret missing-credential response when host auth is unavailable.
+  }
+
+  return readStringCredential(process.env[OMNIROUTE_API_KEY_ENV_VAR]);
+}
+
 export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
   return {
     id: OMNIROUTE_PROVIDER_ID,
     label: OMNIROUTE_LABEL,
     hint: "Search the web using OmniRoute's multi-provider search endpoint. Supports freshness filtering and region-specific results.",
     envVars: [OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR],
+    authProviderId: OMNIROUTE_PROVIDER_ID,
     placeholder: "Search the web via OmniRoute",
     signupUrl: "",
     credentialPath: `models.providers.${OMNIROUTE_PROVIDER_ID}.apiKey`,
     getCredentialValue: (searchConfig) => searchConfig?.apiKey,
+    getConfiguredCredentialValue: (config) => {
+      const searchConfig = config?.tools?.web?.search;
+      if (searchConfig && typeof searchConfig === "object" && Object.hasOwn(searchConfig, "apiKey")) {
+        return undefined;
+      }
+      return config?.models?.providers?.[OMNIROUTE_PROVIDER_ID]?.apiKey;
+    },
     setCredentialValue: (searchConfigTarget, value) => {
       searchConfigTarget.apiKey = value;
     },
     createTool: (ctx) => {
-      const searchConfig = ctx.searchConfig;
-      const apiKey =
-        (typeof searchConfig?.apiKey === "string" ? searchConfig.apiKey : undefined) ??
-        process.env[OMNIROUTE_API_KEY_ENV_VAR] ??
-        "";
-
       const providerConfig = ctx.config?.models?.providers?.[OMNIROUTE_PROVIDER_ID];
       const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config });
-      const http = resolveOmniRouteHttpRequestConfig({
-        baseUrl,
-        defaultBaseUrl: OMNIROUTE_DEFAULT_BASE_URL,
-        request: providerConfig?.request,
-        defaultHeaders: {
-          Accept: "application/json",
-          Authorization: `Bearer ${apiKey}`,
-        },
-      });
 
       return {
         description:
@@ -102,15 +144,31 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
           },
           required: ["query"],
         },
-        execute: async (args) => {
+        execute: async (args, executionContext) => {
           const query = String(args.query ?? "").trim();
           if (!query) {
             return { error: "Search query is required." };
           }
+
+          const apiKey = await resolveWebSearchApiKey({
+            config: ctx.config,
+            agentDir: ctx.agentDir,
+            searchConfig: ctx.searchConfig,
+            providerApiKey: providerConfig?.apiKey,
+          });
           if (!apiKey) {
             return { error: "OmniRoute API key is not configured." };
           }
 
+          const http = resolveOmniRouteHttpRequestConfig({
+            baseUrl,
+            defaultBaseUrl: OMNIROUTE_DEFAULT_BASE_URL,
+            request: providerConfig?.request,
+            defaultHeaders: {
+              Accept: "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+          });
           const headers = new Headers(http.headers);
           if (!headers.has("Content-Type")) {
             headers.set("Content-Type", "application/json");
@@ -138,6 +196,7 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
             headers,
             body,
             timeoutMs: 30_000,
+            signal: executionContext?.signal,
             ssrfPolicy: http.ssrfPolicy,
             dispatcherPolicy: http.dispatcherPolicy,
           });
