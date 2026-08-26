@@ -41,7 +41,7 @@ jobs:
             peerResolution: strict
           - label: beta
             spec: beta
-            peerResolution: alias
+            peerResolution: legacy
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
