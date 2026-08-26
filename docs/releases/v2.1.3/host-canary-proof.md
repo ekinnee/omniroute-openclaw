@@ -1,14 +1,14 @@
 # v2.1.3 Host Canary Proof
 
 This is the sanitized repository copy of the bounded, non-production host
-canary required before the release-preparation PR.
+canary for the exact release candidate.
 
 ## Frozen inputs
 
-- Candidate commit: `8cd79c65138635938f4280712220a58e5b29def3`
-- Packed candidate: `@ekinnee/omniroute-provider@2.1.2`
+- Candidate commit: `efc9a87981e77ff39b4d6bdcc394c204b9fcb2e6`
+- Packed candidate: `@ekinnee/omniroute-provider@2.1.3`
 - Packed candidate SHA-256:
-  `96daa0ff190df493f41d90fc9404ee0d481620ef3d790287bc64495ddea6a306`
+  `119922eb5b66547c91d88369e45986ff80571fdd6822abb685ef166cdc54da1d`
 - Packaged host: `openclaw@2026.7.1`
 - Node: `v24.19.0`
 - Transport fixture: loopback-only fake OmniRoute HTTP server
@@ -18,7 +18,7 @@ or external upstream endpoint was used.
 
 ## Installation and registration
 
-The exact packed plugin was installed by the packaged host's
+The exact `2.1.3` packed plugin was installed by the packaged host's
 `plugins install npm-pack:<tarball>` path. Runtime inspection reported the
 plugin enabled, activated, imported, and loaded. The registration contract
 reported five capabilities with provider IDs for chat, embeddings, image,
@@ -51,7 +51,7 @@ the expected model/request shape:
 | embedding create | `POST /embeddings` | `canary-embedding` | embedding `[0.1, 0.2, 0.3]`, dimensions `3` |
 | image generate | `POST /images/generations` | `canary-image` | valid 1x1 PNG fixture output |
 | video generate | `POST /videos/generations` plus fixture download | `canary-video` | 12-byte loopback fixture output |
-| web search | `POST /search` | `auto` | query `host canary`, limit `1` |
+| web search | `POST /search` | `auto` | query `host canary 2.1.3`, limit `1` |
 
 The sanitized assertion result was:
 
