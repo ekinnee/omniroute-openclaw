@@ -61,9 +61,11 @@ jobs:
           npm pack --cache /tmp/omniroute-openclaw-npm-cache --pack-destination "$package_dir"
           package_path="$(find "$package_dir" -maxdepth 1 -type f -name '*.tgz' -print -quit)"
           test -n "$package_path"
-          echo "package_dir=$package_dir" >> "$GITHUB_OUTPUT"
-          echo "package_filename=$(basename "$package_path")" >> "$GITHUB_OUTPUT"
-          echo "package_sha256=$(sha256sum "$package_path" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+          {
+            echo "package_dir=$package_dir"
+            echo "package_filename=$(basename "$package_path")"
+            echo "package_sha256=$(sha256sum "$package_path" | awk '{print $1}')"
+          } >> "$GITHUB_OUTPUT"
       - name: Resolve OpenClaw target
         id: openclaw
         env:
