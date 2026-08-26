@@ -1,6 +1,5 @@
 // OmniRoute web search provider using public SDK registration contracts.
 import type { OpenClawConfig, OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
-import { isProviderAuthError } from "openclaw/plugin-sdk/agent-runtime";
 import {
   assertOmniRouteOk,
   postOmniRouteJson,
@@ -42,6 +41,16 @@ function readStringCredential(value: unknown): string | undefined {
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function isMissingOmniRouteAuthError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const authError = error as {
+    code?: unknown;
+    provider?: unknown;
+  };
+  return authError.provider === OMNIROUTE_PROVIDER_ID &&
+    (authError.code === "missing-provider-auth" || authError.code === "missing-api-key");
+}
+
 async function resolveWebSearchApiKey(params: {
   config?: OpenClawConfig;
   agentDir?: string;
@@ -66,7 +75,7 @@ async function resolveWebSearchApiKey(params: {
       return resolved;
     }
   } catch (error) {
-    if (!isProviderAuthError(error)) {
+    if (!isMissingOmniRouteAuthError(error)) {
       throw error;
     }
     // Preserve the provider's documented environment fallback and a stable

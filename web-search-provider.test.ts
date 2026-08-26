@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { ProviderAuthError } from "openclaw/plugin-sdk/agent-runtime";
 
 const authMock = vi.hoisted(() => ({
   resolveOmniRouteApiKey: vi.fn(),
@@ -38,6 +37,19 @@ function mockSearchResponse() {
       headers: { "content-type": "application/json" },
     }),
   );
+}
+
+function createAuthError(params?: {
+  code?: string;
+  name?: string;
+  provider?: string;
+}) {
+  const error = new Error("auth unavailable");
+  error.name = params?.name ?? "ProviderAuthError";
+  return Object.assign(error, {
+    code: params?.code ?? "missing-provider-auth",
+    provider: params?.provider ?? "omniroute",
+  });
 }
 
 describe("OmniRoute web search provider", () => {
@@ -115,9 +127,7 @@ describe("OmniRoute web search provider", () => {
   });
 
   it("falls back to OMNIROUTE_API_KEY when shared auth is unavailable", async () => {
-    authMock.resolveOmniRouteApiKey.mockRejectedValue(
-      new ProviderAuthError("missing-provider-auth", "omniroute", "auth unavailable"),
-    );
+    authMock.resolveOmniRouteApiKey.mockRejectedValue(createAuthError());
     vi.stubEnv("OMNIROUTE_API_KEY", "env-key");
     const fetchMock = mockSearchResponse();
     const tool = createTool();
@@ -152,6 +162,34 @@ describe("OmniRoute web search provider", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("does not treat a non-missing provider auth error as an environment fallback", async () => {
+    authMock.resolveOmniRouteApiKey.mockRejectedValue(
+      createAuthError({ code: "provider-auth-failed" }),
+    );
+    vi.stubEnv("OMNIROUTE_API_KEY", "env-key");
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const tool = createTool();
+
+    await expect(tool.execute({ query: "authorization failure" })).rejects.toThrow(
+      "auth unavailable",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("does not treat another provider's missing auth as an OmniRoute fallback", async () => {
+    authMock.resolveOmniRouteApiKey.mockRejectedValue(
+      createAuthError({ provider: "other-provider" }),
+    );
+    vi.stubEnv("OMNIROUTE_API_KEY", "env-key");
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const tool = createTool();
+
+    await expect(tool.execute({ query: "other provider" })).rejects.toThrow(
+      "auth unavailable",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
   it("keeps an explicit web-search key ahead of shared auth", async () => {
     authMock.resolveOmniRouteApiKey.mockResolvedValue("shared-key");
     const fetchMock = mockSearchResponse();
@@ -175,7 +213,7 @@ describe("OmniRoute web search provider", () => {
 
   it("returns a stable non-secret error without contacting OmniRoute when credentials are unavailable", async () => {
     authMock.resolveOmniRouteApiKey.mockRejectedValue(
-      new ProviderAuthError("missing-provider-auth", "omniroute", "secret-bearing auth failure"),
+      createAuthError({ code: "missing-api-key", name: "MissingProviderAuthError" }),
     );
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const tool = createTool();

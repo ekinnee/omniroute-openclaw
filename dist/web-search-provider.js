@@ -1,4 +1,3 @@
-import { isProviderAuthError } from "openclaw/plugin-sdk/agent-runtime";
 import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
@@ -23,6 +22,13 @@ function resolveFreshness(value) {
 function readStringCredential(value) {
     return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
+function isMissingOmniRouteAuthError(error) {
+    if (!error || typeof error !== "object")
+        return false;
+    const authError = error;
+    return authError.provider === OMNIROUTE_PROVIDER_ID &&
+        (authError.code === "missing-provider-auth" || authError.code === "missing-api-key");
+}
 async function resolveWebSearchApiKey(params) {
     const searchApiKey = readStringCredential(params.searchConfig?.apiKey);
     const providerApiKey = readStringCredential(params.providerApiKey);
@@ -42,7 +48,7 @@ async function resolveWebSearchApiKey(params) {
         }
     }
     catch (error) {
-        if (!isProviderAuthError(error)) {
+        if (!isMissingOmniRouteAuthError(error)) {
             throw error;
         }
         // Preserve the provider's documented environment fallback and a stable
