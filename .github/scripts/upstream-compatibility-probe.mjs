@@ -105,7 +105,7 @@ function runSourceContract() {
   assertPluginManifest(repositoryRoot);
   assertEqual(
     lockfileOpenClaw.specifier,
-    `>=${EXPECTED_COMPATIBILITY_FLOOR}`,
+    EXPECTED_PEER_RANGE,
     "pnpm-lock.yaml OpenClaw specifier",
   );
   assertEqual(
