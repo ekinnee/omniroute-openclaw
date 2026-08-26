@@ -9,6 +9,7 @@ on:
       - ".github/scripts/**"
       - "*.ts"
       - "dist/**"
+      - "openclaw.plugin.json"
       - "package.json"
       - "pnpm-lock.yaml"
       - "tsconfig.json"
