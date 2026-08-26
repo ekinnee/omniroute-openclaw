@@ -11,6 +11,8 @@ Patch release for `@ekinnee/omniroute-provider`.
 - Corrected the declared OpenClaw build identity and prerelease-aware peer/API
   contract, with continuous packed-artifact compatibility coverage.
 - Added floor/latest/beta compatibility coverage with durable probe summaries.
+- Updated README and the support roadmap to identify the current release and
+  the provider capabilities shipped in this train.
 
 ## Compatibility
 

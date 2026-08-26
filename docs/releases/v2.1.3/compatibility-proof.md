@@ -6,7 +6,7 @@ endpoints.
 
 ## Exact inputs
 
-- Release candidate commit: `8f0113d5905b856abdbf7cbae9275912010389cd`
+- Release artifact source commit: `8f0113d5905b856abdbf7cbae9275912010389cd`
 - Release candidate base: `b4f6cb47b3a4aacdaf3bd852ea415e1851e66073`
 - Package: `@ekinnee/omniroute-provider@2.1.3`
 - Stable compatibility floor: OpenClaw `2026.7.1`
@@ -41,8 +41,13 @@ callable catalog function.
 
 ## Remote exact-head evidence
 
-- The release-candidate matrix run on exact commit `8f0113d…` passed all three
-  rows: [run 32991287214](https://github.com/ekinnee/omniroute-openclaw/actions/runs/32991287214).
+- The packed-artifact matrix passed all three rows on the package-bearing
+  release candidate `8f0113d…`: [run 32991287214](https://github.com/ekinnee/omniroute-openclaw/actions/runs/32991287214).
+- The subsequent release-proof, README, and roadmap commits changed only
+  documentation. The packed package allowlist and tarball digest remained
+  unchanged. The release PR's exact-head matrix run is the final authority for
+  the documentation-complete candidate and was independently dispatched after
+  these updates.
 - After the compatibility repair merged, the exact `main` matrix passed on
   `b4f6cb4…`: [run 32990697504](https://github.com/ekinnee/omniroute-openclaw/actions/runs/32990697504).
 - The merged repair was [PR #36](https://github.com/ekinnee/omniroute-openclaw/pull/36);
