@@ -1,9 +1,12 @@
 name: Upstream Compatibility
 
 on:
+  push:
+    branches: [main]
   pull_request:
     paths:
       - ".github/workflows/upstream-compatibility.yml"
+      - ".github/scripts/**"
       - "*.ts"
       - "dist/**"
       - "package.json"
@@ -21,10 +24,23 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  openclaw-beta:
-    name: OpenClaw beta package
+  openclaw-compatibility:
+    name: OpenClaw ${{ matrix.label }} (${{ matrix.spec }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - label: floor
+            spec: 2026.7.1
+            peerResolution: strict
+          - label: latest
+            spec: latest
+            peerResolution: alias
+          - label: beta
+            spec: beta
+            peerResolution: alias
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -33,52 +49,93 @@ jobs:
           node-version: 24.15.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      - name: Verify package metadata against the lockfile
+        run: node .github/scripts/upstream-compatibility-probe.mjs --source-contract
       - run: pnpm build
       - name: Pack the plugin
+        id: pack
         run: |
-          mkdir -p /tmp/omniroute-openclaw-package
-          npm pack --cache /tmp/omniroute-openclaw-npm-cache --pack-destination /tmp/omniroute-openclaw-package
-      - name: Load the packaged plugin with the latest OpenClaw beta
+          set -euo pipefail
+          package_dir="$(mktemp -d /tmp/omniroute-openclaw-package.XXXXXX)"
+          npm pack --cache /tmp/omniroute-openclaw-npm-cache --pack-destination "$package_dir"
+          package_path="$(find "$package_dir" -maxdepth 1 -type f -name '*.tgz' -print -quit)"
+          test -n "$package_path"
+          echo "package_dir=$package_dir" >> "$GITHUB_OUTPUT"
+          echo "package_filename=$(basename "$package_path")" >> "$GITHUB_OUTPUT"
+          echo "package_sha256=$(sha256sum "$package_path" | awk '{print $1}')" >> "$GITHUB_OUTPUT"
+      - name: Resolve OpenClaw target
+        id: openclaw
+        env:
+          OPENCLAW_SPEC: ${{ matrix.spec }}
         run: |
-          mkdir -p /tmp/omniroute-openclaw-compat
-          cd /tmp/omniroute-openclaw-compat
-          npm init --yes
-          # npm ranges intentionally exclude prereleases, so install the newer beta
-          # explicitly rather than treating it as a supported stable peer release.
-          npm install --cache /tmp/omniroute-openclaw-npm-cache --ignore-scripts --legacy-peer-deps --no-save openclaw@beta /tmp/omniroute-openclaw-package/*.tgz
+          set -euo pipefail
+          expected_version="$(npm view "openclaw@${OPENCLAW_SPEC}" version)"
+          test -n "$expected_version"
+          echo "OpenClaw ${OPENCLAW_SPEC} resolves to ${expected_version}"
+          echo "expected_version=$expected_version" >> "$GITHUB_OUTPUT"
+      - name: Load the packaged plugin and run the public compatibility probe
+        id: probe
+        env:
+          TARGET_ROLE: ${{ matrix.label }}
+          OPENCLAW_SPEC: ${{ matrix.spec }}
+          PEER_RESOLUTION: ${{ matrix.peerResolution }}
+          EXPECTED_OPENCLAW_VERSION: ${{ steps.openclaw.outputs.expected_version }}
+          PACKAGE_DIR: ${{ steps.pack.outputs.package_dir }}
+          PACKAGE_FILENAME: ${{ steps.pack.outputs.package_filename }}
+          PACKAGE_SHA256: ${{ steps.pack.outputs.package_sha256 }}
+        run: |
+          set -euo pipefail
+          package_path="${PACKAGE_DIR}/${PACKAGE_FILENAME}"
+          test -n "$package_path"
+          test -f "$package_path"
+          compat_dir="$(mktemp -d /tmp/omniroute-openclaw-compat.XXXXXX)"
+          cd "$compat_dir"
+          npm init --yes >/dev/null
+          if [[ "$PEER_RESOLUTION" == "strict" ]]; then
+            peer_flags=()
+          else
+            peer_flags=(--legacy-peer-deps)
+            echo "The ${TARGET_ROLE} alias is an artifact smoke target; npm peer resolution is legacy because the selected alias may be a semver prerelease."
+          fi
+          # The matrix is intentionally a narrow artifact ABI probe. The
+          # release packet separately proves normal OpenClaw host installation.
+          npm install --cache /tmp/omniroute-openclaw-npm-cache --ignore-scripts "${peer_flags[@]}" --no-save "openclaw@${OPENCLAW_SPEC}" "$package_path"
           ./node_modules/.bin/omniroute-catalog-audit --help | grep -F "Usage: omniroute-catalog-audit"
-          node --input-type=module <<'NODE'
-          import plugin from "@ekinnee/omniroute-provider/dist/index.js";
+          export OPENCLAW_EXPECTED_VERSION="$EXPECTED_OPENCLAW_VERSION"
+          export OPENCLAW_BUILD_VERSION="2026.7.1"
+          probe_output="$(node "$GITHUB_WORKSPACE/.github/scripts/upstream-compatibility-probe.mjs" --installed-artifact)"
+          printf '%s\n' "$probe_output"
+          result_path="$RUNNER_TEMP/upstream-compatibility-${TARGET_ROLE}.json"
+          PROBE_OUTPUT="$probe_output" RESULT_PATH="$result_path" node --input-type=module <<'NODE'
+          import { writeFileSync } from "node:fs";
 
-          const registered = {
-            provider: 0,
-            embedding: 0,
-            image: 0,
-            video: 0,
-            webSearch: 0,
-          };
-          const providers = [];
-
-          plugin.register({
-            registerProvider: (provider) => {
-              registered.provider++;
-              providers.push(provider);
-            },
-            registerEmbeddingProvider: () => registered.embedding++,
-            registerImageGenerationProvider: () => registered.image++,
-            registerVideoGenerationProvider: () => registered.video++,
-            registerWebSearchProvider: () => registered.webSearch++,
-          });
-
-          for (const [capability, count] of Object.entries(registered)) {
-            if (count !== 1) {
-              throw new Error(`Expected exactly one ${capability} registration, got ${count}`);
-            }
-          }
-          if (providers[0]?.id !== "omniroute") {
-            throw new Error(`Expected provider id omniroute, got ${providers[0]?.id}`);
-          }
-          if (typeof providers[0]?.catalog?.run !== "function") {
-            throw new Error("Expected the OmniRoute provider to register catalog.run");
-          }
+          const probe = JSON.parse(process.env.PROBE_OUTPUT);
+          writeFileSync(
+            process.env.RESULT_PATH,
+            `${JSON.stringify({
+              targetRole: process.env.TARGET_ROLE,
+              openClawSpec: process.env.OPENCLAW_SPEC,
+              expectedOpenClawVersion: process.env.EXPECTED_OPENCLAW_VERSION,
+              peerResolution: process.env.PEER_RESOLUTION,
+              packageFilename: process.env.PACKAGE_FILENAME,
+              packageSha256: process.env.PACKAGE_SHA256,
+              probe,
+            }, null, 2)}\n`,
+          );
           NODE
+          echo "result_path=$result_path" >> "$GITHUB_OUTPUT"
+          {
+            echo "### OpenClaw compatibility: ${TARGET_ROLE}"
+            echo "- Selector: \\`openclaw@${OPENCLAW_SPEC}\\`"
+            echo "- Resolved version: \\`${EXPECTED_OPENCLAW_VERSION}\\`"
+            echo "- Peer resolution: \\`${PEER_RESOLUTION}\\`"
+            echo "- Plugin tarball SHA-256: \\`${PACKAGE_SHA256}\\`"
+            echo "- Probe scope: packed-artifact ABI/public registration (host-install proof is separate)"
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload compatibility evidence
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: upstream-compatibility-${{ matrix.label }}
+          path: ${{ steps.probe.outputs.result_path }}
+          if-no-files-found: error
