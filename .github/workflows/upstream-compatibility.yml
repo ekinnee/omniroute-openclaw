@@ -108,6 +108,25 @@ jobs:
           export OPENCLAW_BUILD_VERSION="2026.7.1"
           probe_output="$(node "$GITHUB_WORKSPACE/.github/scripts/upstream-compatibility-probe.mjs" --installed-artifact)"
           printf '%s\n' "$probe_output"
+          probe_summary="$(
+            PROBE_OUTPUT="$probe_output" node --input-type=module <<'NODE'
+          const probe = JSON.parse(process.env.PROBE_OUTPUT);
+          const counts = Object.entries(probe.registrations)
+            .map(([name, value]) => `${name}=${value}`)
+            .join(", ");
+          const ids = Object.entries(probe.registrationIds)
+            .map(([name, value]) => `${name}=${value}`)
+            .join(", ");
+          process.stdout.write([
+            `- Probe package version: \`${probe.packageVersion}\``,
+            `- Probe OpenClaw version: \`${probe.openClawVersion}\``,
+            `- Registration counts: \`${counts}\``,
+            `- Registration IDs: \`${ids}\``,
+            `- Provider ID: \`${probe.providerId}\``,
+            `- catalog.run: \`${probe.catalogRun}\``,
+          ].join("\n"));
+          NODE
+          )"
           {
             echo "### OpenClaw compatibility: ${TARGET_ROLE}"
             echo "- Selector: \`openclaw@${OPENCLAW_SPEC}\`"
@@ -115,4 +134,5 @@ jobs:
             echo "- Peer resolution: \`${PEER_RESOLUTION}\`"
             echo "- Plugin tarball SHA-256: \`${PACKAGE_SHA256}\`"
             echo "- Probe scope: packed-artifact ABI/public registration (host-install proof is separate)"
+            printf '%s\n' "$probe_summary"
           } >> "$GITHUB_STEP_SUMMARY"
