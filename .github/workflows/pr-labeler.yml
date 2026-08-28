@@ -8,9 +8,15 @@ permissions:
   contents: read
   pull-requests: write
 
+concurrency:
+  group: pr-labeler-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
 jobs:
   label:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       # Do not check out pull-request code in this write-token workflow.
-      - uses: actions/labeler@v7
+      # v7; pin the implementation because this workflow can write PR labels.
+      - uses: actions/labeler@bf12e9b00b37c5c0ca2b87b79b2daf7891dbda13
