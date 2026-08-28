@@ -3,6 +3,7 @@ import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
 import {
   assertOmniRouteOk,
   getOmniRouteJson,
+  OMNIROUTE_JSON_READ_OPTIONS,
   readOmniRouteJson,
   resolveOmniRouteHttpRequestConfig,
 } from "./http.js";
@@ -286,7 +287,11 @@ export async function auditOmniRouteCatalog(params: {
     await assertOmniRouteOk(response, "OmniRoute catalog audit");
     return buildOmniRouteCatalogAuditReport({
       baseUrl: request.baseUrl,
-      payload: await readOmniRouteJson(response, "OmniRoute catalog audit"),
+      payload: await readOmniRouteJson(
+        response,
+        "OmniRoute catalog audit",
+        OMNIROUTE_JSON_READ_OPTIONS.catalogAudit,
+      ),
     });
   } finally {
     await release();

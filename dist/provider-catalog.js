@@ -2,10 +2,9 @@ import { createHash } from "node:crypto";
 import { OMNIROUTE_DEFAULT_BASE_URL, } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
 import { redactOmniRouteBaseUrl, resolveOmniRouteBaseUrl } from "./base-url.js";
-import { assertOmniRouteOk, getOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
+import { assertOmniRouteOk, getOmniRouteJson, OMNIROUTE_JSON_READ_OPTIONS, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 const liveCatalogCache = new Map();
 const LIVE_CATALOG_TTL_MS = 30_000;
-const LIVE_CATALOG_BODY_MAX_BYTES = 4 * 1024 * 1024;
 const LIVE_CATALOG_TIMEOUT_MS = 5_000;
 function deleteLiveCatalogCacheEntryIfCurrent(key, entry) {
     if (liveCatalogCache.get(key) === entry) {
@@ -312,10 +311,7 @@ async function fetchOmniRouteModels(params, builder, errorLabel) {
     });
     try {
         await assertOmniRouteOk(response, `OmniRoute ${errorLabel} model catalog`);
-        return buildOmniRouteModels((await readOmniRouteJson(response, `OmniRoute ${errorLabel} model catalog`, {
-            maxBytes: LIVE_CATALOG_BODY_MAX_BYTES,
-            chunkTimeoutMs: LIVE_CATALOG_TIMEOUT_MS,
-        })), builder);
+        return buildOmniRouteModels((await readOmniRouteJson(response, `OmniRoute ${errorLabel} model catalog`, OMNIROUTE_JSON_READ_OPTIONS.catalog)), builder);
     }
     finally {
         await release();

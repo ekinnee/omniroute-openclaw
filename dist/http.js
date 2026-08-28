@@ -144,6 +144,37 @@ export async function getOmniRouteJson(params) {
     });
     return { response, release };
 }
+const MEBIBYTE = 1024 * 1024;
+const DEFAULT_OMNIROUTE_JSON_READ_OPTIONS = {
+    maxBytes: 8 * MEBIBYTE,
+    chunkTimeoutMs: 30_000,
+};
+export const OMNIROUTE_JSON_READ_OPTIONS = {
+    catalog: {
+        maxBytes: 4 * MEBIBYTE,
+        chunkTimeoutMs: 5_000,
+    },
+    catalogAudit: {
+        maxBytes: 4 * MEBIBYTE,
+        chunkTimeoutMs: 5_000,
+    },
+    embeddings: {
+        maxBytes: 16 * MEBIBYTE,
+        chunkTimeoutMs: 30_000,
+    },
+    imageGeneration: {
+        maxBytes: 32 * MEBIBYTE,
+        chunkTimeoutMs: 30_000,
+    },
+    videoGeneration: {
+        maxBytes: 4 * MEBIBYTE,
+        chunkTimeoutMs: 30_000,
+    },
+    webSearch: {
+        maxBytes: 4 * MEBIBYTE,
+        chunkTimeoutMs: 30_000,
+    },
+};
 async function readOmniRouteJsonBytes(response, operation, maxBytes, chunkTimeoutMs) {
     if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
         throw new RangeError(`OmniRoute JSON maxBytes must be a non-negative safe integer: ${maxBytes}`);
@@ -203,18 +234,12 @@ async function readOmniRouteJsonBytes(response, operation, maxBytes, chunkTimeou
     }
     return bytes;
 }
-export async function readOmniRouteJson(response, operation, options) {
-    if (options?.maxBytes !== undefined) {
-        const bytes = await readOmniRouteJsonBytes(response, operation, options.maxBytes, options.chunkTimeoutMs);
-        try {
-            return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
-        }
-        catch {
-            throw new Error(`${operation} returned invalid JSON`);
-        }
-    }
+export async function readOmniRouteJson(response, operation, options = DEFAULT_OMNIROUTE_JSON_READ_OPTIONS) {
+    // All provider responses must stay bounded. Endpoint-specific callers can
+    // raise the default for known larger payloads, but never opt out of a limit.
+    const bytes = await readOmniRouteJsonBytes(response, operation, options.maxBytes ?? DEFAULT_OMNIROUTE_JSON_READ_OPTIONS.maxBytes, options.chunkTimeoutMs ?? DEFAULT_OMNIROUTE_JSON_READ_OPTIONS.chunkTimeoutMs);
     try {
-        return await response.json();
+        return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
     }
     catch {
         throw new Error(`${operation} returned invalid JSON`);

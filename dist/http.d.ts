@@ -50,6 +50,32 @@ export type OmniRouteJsonReadOptions = {
     maxBytes?: number;
     chunkTimeoutMs?: number;
 };
+export declare const OMNIROUTE_JSON_READ_OPTIONS: {
+    readonly catalog: {
+        readonly maxBytes: number;
+        readonly chunkTimeoutMs: 5000;
+    };
+    readonly catalogAudit: {
+        readonly maxBytes: number;
+        readonly chunkTimeoutMs: 5000;
+    };
+    readonly embeddings: {
+        readonly maxBytes: number;
+        readonly chunkTimeoutMs: 30000;
+    };
+    readonly imageGeneration: {
+        readonly maxBytes: number;
+        readonly chunkTimeoutMs: 30000;
+    };
+    readonly videoGeneration: {
+        readonly maxBytes: number;
+        readonly chunkTimeoutMs: 30000;
+    };
+    readonly webSearch: {
+        readonly maxBytes: number;
+        readonly chunkTimeoutMs: 30000;
+    };
+};
 export declare function readOmniRouteJson(response: Response, operation: string, options?: OmniRouteJsonReadOptions): Promise<unknown>;
 export declare function assertOmniRouteOk(response: Response, operation: string): Promise<void>;
 export {};

@@ -12,6 +12,7 @@ import { redactOmniRouteBaseUrl, resolveOmniRouteBaseUrl } from "./base-url.js";
 import {
   assertOmniRouteOk,
   getOmniRouteJson,
+  OMNIROUTE_JSON_READ_OPTIONS,
   readOmniRouteJson,
   resolveOmniRouteHttpRequestConfig,
 } from "./http.js";
@@ -32,7 +33,6 @@ type ResolvedOmniRouteHttpRequest = ReturnType<typeof resolveOmniRouteHttpReques
 
 const liveCatalogCache = new Map<string, LiveCatalogCacheEntry>();
 const LIVE_CATALOG_TTL_MS = 30_000;
-const LIVE_CATALOG_BODY_MAX_BYTES = 4 * 1024 * 1024;
 const LIVE_CATALOG_TIMEOUT_MS = 5_000;
 
 function deleteLiveCatalogCacheEntryIfCurrent(
@@ -475,10 +475,11 @@ async function fetchOmniRouteModels<T extends { id: string }>(
   try {
     await assertOmniRouteOk(response, `OmniRoute ${errorLabel} model catalog`);
     return buildOmniRouteModels(
-      (await readOmniRouteJson(response, `OmniRoute ${errorLabel} model catalog`, {
-        maxBytes: LIVE_CATALOG_BODY_MAX_BYTES,
-        chunkTimeoutMs: LIVE_CATALOG_TIMEOUT_MS,
-      })) as OmniRouteModelListResponse,
+      (await readOmniRouteJson(
+        response,
+        `OmniRoute ${errorLabel} model catalog`,
+        OMNIROUTE_JSON_READ_OPTIONS.catalog,
+      )) as OmniRouteModelListResponse,
       builder,
     );
   } finally {

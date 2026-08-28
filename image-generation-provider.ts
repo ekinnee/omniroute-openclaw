@@ -6,6 +6,7 @@ import {
 } from "./auth.js";
 import {
   assertOmniRouteOk,
+  OMNIROUTE_JSON_READ_OPTIONS,
   postOmniRouteJson,
   readOmniRouteJson,
   resolveOmniRouteHttpRequestConfig,
@@ -165,7 +166,11 @@ export function buildOmniRouteImageGenerationProvider(): ImageGenerationProvider
       try {
         await assertOmniRouteOk(request.response, "OmniRoute image generation failed");
         const images = parseImageResponse(
-          await readOmniRouteJson(request.response, "omniroute.image-generation"),
+          await readOmniRouteJson(
+            request.response,
+            "omniroute.image-generation",
+            OMNIROUTE_JSON_READ_OPTIONS.imageGeneration,
+          ),
         );
         if (images.length === 0) {
           throw new Error("OmniRoute image generation response missing image data");
