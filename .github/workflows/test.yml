@@ -15,7 +15,10 @@ concurrency:
 
 jobs:
   test:
+    # Keep these checks together: the generated-artifact assertion must inspect
+    # the same build output that the unit tests exercise.
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -23,10 +26,13 @@ jobs:
         with:
           node-version: 24.15.0
           cache: pnpm
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm build
+      - name: Install locked dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build TypeScript
+        run: pnpm build
       - name: Check dist is up to date
         run: |
           git diff --exit-code -- dist/ \
             || { echo "::error::dist/ is stale — run 'pnpm build' and commit the regenerated artifacts"; exit 1; }
-      - run: pnpm test
+      - name: Run unit tests
+        run: pnpm test

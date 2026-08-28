@@ -3,16 +3,22 @@ name: Publish to ClawHub
 on:
   release:
     types: [published]
+  # Manual runs are retained for an owner-approved dry run only.
   workflow_dispatch:
-    inputs:
-      dry_run:
-        description: Preview only
-        type: boolean
-        default: true
+
+# Do not cancel a publication after it has started; serialize attempts for a
+# release tag while allowing unrelated dry-run previews to complete.
+concurrency:
+  group: clawhub-publish-${{ github.event.release.tag_name || github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   build:
+    # `github.actor` is the original trigger; `github.triggering_actor` also
+    # rejects a re-run initiated by anyone other than the repository owner.
+    if: github.actor == 'ekinnee' && github.triggering_actor == 'ekinnee'
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     permissions:
       contents: read
       actions: write
@@ -26,6 +32,10 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm build
+      - name: Check dist is up to date
+        run: |
+          git diff --exit-code -- dist/ \
+            || { echo "::error::dist/ is stale — run 'pnpm build' and commit the regenerated artifacts"; exit 1; }
       - name: Verify release tag matches package version
         if: github.event_name == 'release'
         run: |
@@ -39,14 +49,25 @@ jobs:
           path: ./*.tgz
           if-no-files-found: error
 
-  publish_release:
-    if: github.event_name == 'release'
+  authorize_publish:
+    name: Authorize ClawHub publication
+    if: github.actor == 'ekinnee' && github.triggering_actor == 'ekinnee'
     needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: clawhub-production
+    steps:
+      - run: echo "ClawHub publication authorized."
+
+  publish_release:
+    if: github.event_name == 'release' && github.actor == 'ekinnee' && github.triggering_actor == 'ekinnee' && needs.authorize_publish.result == 'success'
+    needs: [build, authorize_publish]
     permissions:
       actions: read
       contents: read
       id-token: write
-    uses: openclaw/clawhub/.github/workflows/package-publish.yml@v0.23.1
+    # v0.23.1; pin the publisher implementation, not its movable tag.
+    uses: openclaw/clawhub/.github/workflows/package-publish.yml@a230d962db64019462c2c8ee400755eb92169908
     with:
       source: ekinnee/omniroute-openclaw
       dry_run: false
@@ -55,16 +76,16 @@ jobs:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
 
   publish_dispatch:
-    if: github.event_name == 'workflow_dispatch'
-    needs: build
+    if: github.event_name == 'workflow_dispatch' && github.actor == 'ekinnee' && github.triggering_actor == 'ekinnee' && needs.authorize_publish.result == 'success'
+    needs: [build, authorize_publish]
     permissions:
       actions: read
       contents: read
       id-token: write
-    uses: openclaw/clawhub/.github/workflows/package-publish.yml@v0.23.1
+    uses: openclaw/clawhub/.github/workflows/package-publish.yml@a230d962db64019462c2c8ee400755eb92169908
     with:
       source: ekinnee/omniroute-openclaw
-      dry_run: ${{ inputs.dry_run }}
+      dry_run: true
       package_artifact_name: clawpack
     secrets:
       clawhub_token: ${{ secrets.CLAWHUB_TOKEN }}
