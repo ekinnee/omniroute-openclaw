@@ -27,7 +27,7 @@ import { fetchOmniRouteUsage, resolveOmniRouteUsageAuth } from "./usage.js";
 const plugin: OpenClawPluginDefinition = definePluginEntry({
   id: OMNIROUTE_PROVIDER_ID,
   name: "OmniRoute Provider",
-  description: "Bundled OmniRoute provider plugin",
+  description: "External OmniRoute provider plugin",
   register: (api) => {
     api.registerProvider({
       id: OMNIROUTE_PROVIDER_ID,
