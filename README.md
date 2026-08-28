@@ -131,7 +131,7 @@ The plugin registers itself as a web search provider automatically — no additi
 }
 ```
 
-The web search tool supports `query`, `count` (1-10), `freshness` (day/week/month/year), `country`, and `language` parameters. Results include titles, URLs, snippets, and full page content when available.
+The web search tool supports `query`, `count` (1-10), `freshness` (day/week/month/year), `country`, and `language` parameters. Results include titles, URLs, snippets, and publication dates when OmniRoute supplies them.
 
 ## How It Works
 

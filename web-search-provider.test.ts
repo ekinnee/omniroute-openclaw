@@ -224,6 +224,48 @@ describe("OmniRoute web search provider", () => {
     expect(fetchMock).not.toHaveBeenCalled();
   });
 
+  it("maps freshness and result fields to the OmniRoute and OpenClaw contracts", async () => {
+    authMock.resolveOmniRouteApiKey.mockResolvedValue("request-key");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        results: [
+          {
+            title: "Recent result",
+            url: "https://example.com/recent",
+            snippet: "A recent result.",
+            published_at: "2026-08-28T01:02:03Z",
+            content: { format: "text", text: "Full page content", length: 17 },
+          },
+        ],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const tool = createTool();
+
+    await expect(
+      tool.execute({ query: "recent OmniRoute news", count: 3, freshness: "week" }),
+    ).resolves.toEqual({
+      results: [
+        {
+          title: "Recent result",
+          url: "https://example.com/recent",
+          snippet: "A recent result.",
+          published: "2026-08-28T01:02:03Z",
+        },
+      ],
+    });
+
+    const requestBody = JSON.parse(String((fetchMock.mock.calls[0]?.[1] as RequestInit).body));
+    expect(requestBody).toMatchObject({
+      query: "recent OmniRoute news",
+      max_results: 3,
+      time_range: "week",
+    });
+    expect(requestBody).not.toHaveProperty("freshness");
+  });
+
   it("forwards cancellation to the in-flight OmniRoute request", async () => {
     authMock.resolveOmniRouteApiKey.mockResolvedValue("request-key");
     const controller = new AbortController();
