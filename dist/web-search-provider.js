@@ -1,4 +1,4 @@
-import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
+import { assertOmniRouteOk, OMNIROUTE_JSON_READ_OPTIONS, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
@@ -166,7 +166,7 @@ export function createOmniRouteWebSearchProvider() {
                     });
                     try {
                         await assertOmniRouteOk(request.response, "OmniRoute web search failed");
-                        const payload = await readOmniRouteJson(request.response, "omniroute.web-search");
+                        const payload = await readOmniRouteJson(request.response, "omniroute.web-search", OMNIROUTE_JSON_READ_OPTIONS.webSearch);
                         const rawResults = payload && typeof payload === "object" && Array.isArray(payload.results)
                             ? payload.results
                             : [];

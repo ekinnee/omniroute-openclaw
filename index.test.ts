@@ -917,6 +917,15 @@ describe("omniroute provider plugin", () => {
     );
   });
 
+  it("bounds JSON responses when callers use the shared default", async () => {
+    const { readOmniRouteJson } = await import("./http.js");
+    const body = JSON.stringify({ data: "x".repeat(9 * 1024 * 1024) });
+
+    await expect(
+      readOmniRouteJson(new Response(body), "OmniRoute provider response"),
+    ).rejects.toThrow("response exceeded");
+  });
+
   it("cancels a stalled bounded JSON body", async () => {
     const { readOmniRouteJson } = await import("./http.js");
     let cancelled = false;

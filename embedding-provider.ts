@@ -9,6 +9,7 @@ import { resolveOmniRouteApiKey } from "./auth.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
 import {
   assertOmniRouteOk,
+  OMNIROUTE_JSON_READ_OPTIONS,
   postOmniRouteJson,
   readOmniRouteJson,
   resolveOmniRouteHttpRequestConfig,
@@ -194,7 +195,11 @@ async function requestEmbeddings(
   try {
     await assertOmniRouteOk(request.response, "OmniRoute embeddings failed");
     return parseEmbeddingVectors(
-      await readOmniRouteJson(request.response, "omniroute.embeddings"),
+      await readOmniRouteJson(
+        request.response,
+        "omniroute.embeddings",
+        OMNIROUTE_JSON_READ_OPTIONS.embeddings,
+      ),
       inputs.length,
     );
   } finally {

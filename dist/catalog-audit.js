@@ -1,5 +1,5 @@
 import { resolveOmniRouteApiKey } from "./auth.js";
-import { assertOmniRouteOk, getOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
+import { assertOmniRouteOk, getOmniRouteJson, OMNIROUTE_JSON_READ_OPTIONS, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { redactOmniRouteBaseUrl, resolveOmniRouteBaseUrl } from "./base-url.js";
 const ADVERTISED_MODEL_FIELDS = [
@@ -223,7 +223,7 @@ export async function auditOmniRouteCatalog(params = {}) {
         await assertOmniRouteOk(response, "OmniRoute catalog audit");
         return buildOmniRouteCatalogAuditReport({
             baseUrl: request.baseUrl,
-            payload: await readOmniRouteJson(response, "OmniRoute catalog audit"),
+            payload: await readOmniRouteJson(response, "OmniRoute catalog audit", OMNIROUTE_JSON_READ_OPTIONS.catalogAudit),
         });
     }
     finally {

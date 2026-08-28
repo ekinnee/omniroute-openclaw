@@ -1,5 +1,5 @@
 import { isOmniRouteConfigured, resolveOmniRouteApiKey } from "./auth.js";
-import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
+import { assertOmniRouteOk, OMNIROUTE_JSON_READ_OPTIONS, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
 const MAX_VIDEO_COUNT = 1;
@@ -102,7 +102,7 @@ export function buildOmniRouteVideoGenerationProvider() {
             });
             try {
                 await assertOmniRouteOk(request.response, "OmniRoute video generation failed");
-                const videos = parseVideoResponse(await readOmniRouteJson(request.response, "omniroute.video-generation"));
+                const videos = parseVideoResponse(await readOmniRouteJson(request.response, "omniroute.video-generation", OMNIROUTE_JSON_READ_OPTIONS.videoGeneration));
                 if (videos.length === 0) {
                     throw new Error("OmniRoute video generation response missing video data");
                 }

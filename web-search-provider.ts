@@ -2,6 +2,7 @@
 import type { OpenClawConfig, OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import {
   assertOmniRouteOk,
+  OMNIROUTE_JSON_READ_OPTIONS,
   postOmniRouteJson,
   readOmniRouteJson,
   resolveOmniRouteHttpRequestConfig,
@@ -202,7 +203,11 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
           });
           try {
             await assertOmniRouteOk(request.response, "OmniRoute web search failed");
-            const payload = await readOmniRouteJson(request.response, "omniroute.web-search");
+            const payload = await readOmniRouteJson(
+              request.response,
+              "omniroute.web-search",
+              OMNIROUTE_JSON_READ_OPTIONS.webSearch,
+            );
             const rawResults =
               payload && typeof payload === "object" && Array.isArray((payload as { results?: unknown }).results)
                 ? (payload as { results: unknown[] }).results

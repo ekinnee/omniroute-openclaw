@@ -2,7 +2,7 @@ import { normalizeResolvedSecretInputString } from "openclaw/plugin-sdk/secret-i
 import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
-import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
+import { assertOmniRouteOk, OMNIROUTE_JSON_READ_OPTIONS, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 function requireEmbeddingModel(model) {
     const normalized = model.trim();
     if (!normalized) {
@@ -153,7 +153,7 @@ async function requestEmbeddings(options, inputs, callOptions) {
     });
     try {
         await assertOmniRouteOk(request.response, "OmniRoute embeddings failed");
-        return parseEmbeddingVectors(await readOmniRouteJson(request.response, "omniroute.embeddings"), inputs.length);
+        return parseEmbeddingVectors(await readOmniRouteJson(request.response, "omniroute.embeddings", OMNIROUTE_JSON_READ_OPTIONS.embeddings), inputs.length);
     }
     finally {
         await request.release();

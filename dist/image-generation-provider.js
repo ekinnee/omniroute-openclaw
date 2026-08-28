@@ -1,5 +1,5 @@
 import { isOmniRouteConfigured, resolveOmniRouteApiKey, } from "./auth.js";
-import { assertOmniRouteOk, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
+import { assertOmniRouteOk, OMNIROUTE_JSON_READ_OPTIONS, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
 const DEFAULT_IMAGE_SIZE = "1024x1024";
@@ -132,7 +132,7 @@ export function buildOmniRouteImageGenerationProvider() {
             });
             try {
                 await assertOmniRouteOk(request.response, "OmniRoute image generation failed");
-                const images = parseImageResponse(await readOmniRouteJson(request.response, "omniroute.image-generation"));
+                const images = parseImageResponse(await readOmniRouteJson(request.response, "omniroute.image-generation", OMNIROUTE_JSON_READ_OPTIONS.imageGeneration));
                 if (images.length === 0) {
                     throw new Error("OmniRoute image generation response missing image data");
                 }

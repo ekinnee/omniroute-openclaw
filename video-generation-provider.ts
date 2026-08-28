@@ -3,6 +3,7 @@ import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import { isOmniRouteConfigured, resolveOmniRouteApiKey } from "./auth.js";
 import {
   assertOmniRouteOk,
+  OMNIROUTE_JSON_READ_OPTIONS,
   postOmniRouteJson,
   readOmniRouteJson,
   resolveOmniRouteHttpRequestConfig,
@@ -128,7 +129,11 @@ export function buildOmniRouteVideoGenerationProvider(): VideoGenerationProvider
       try {
         await assertOmniRouteOk(request.response, "OmniRoute video generation failed");
         const videos = parseVideoResponse(
-          await readOmniRouteJson(request.response, "omniroute.video-generation"),
+          await readOmniRouteJson(
+            request.response,
+            "omniroute.video-generation",
+            OMNIROUTE_JSON_READ_OPTIONS.videoGeneration,
+          ),
         );
         if (videos.length === 0) {
           throw new Error("OmniRoute video generation response missing video data");
