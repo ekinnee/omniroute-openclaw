@@ -113,7 +113,7 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
       return {
         description:
           "Search the web using OmniRoute's multi-provider search endpoint. " +
-          "Returns titles, URLs, snippets, and content for each result. " +
+          "Returns titles, URLs, and snippets for each result. " +
           "Supports freshness filtering (day/week/month/year) and region-specific results via country and language parameters.",
         parameters: {
           type: "object",
@@ -182,7 +182,7 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
             typeof args.freshness === "string" ? args.freshness : undefined,
           );
           if (freshness) {
-            body.freshness = freshness;
+            body.time_range = freshness;
           }
           if (typeof args.country === "string" && args.country.trim()) {
             body.country = args.country.trim();
@@ -216,8 +216,9 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
                   title: String(item.title ?? ""),
                   url: String(item.url ?? ""),
                   snippet: String(item.snippet ?? ""),
-                  content: item.content ? String(item.content) : undefined,
-                  publishedAt: item.published_at ? String(item.published_at) : undefined,
+                  ...(typeof item.published_at === "string" && item.published_at
+                    ? { published: item.published_at }
+                    : {}),
                 };
               }),
             };
