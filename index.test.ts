@@ -1683,6 +1683,44 @@ describe("omniroute provider plugin", () => {
     expect(secondBody).toMatchObject({ input: ["document"], input_type: "document-vector" });
   });
 
+  it.each([
+    {
+      name: "duplicate vector indices",
+      data: [
+        { index: 0, embedding: [0.1] },
+        { index: 0, embedding: [0.2] },
+      ],
+      error: /duplicate vector index 0/,
+    },
+    {
+      name: "out-of-range vector indices",
+      data: [
+        { index: 0, embedding: [0.1] },
+        { index: 2, embedding: [0.2] },
+      ],
+      error: /invalid index 2/,
+    },
+  ])("rejects embedding responses with $name", async ({ data, error }) => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ data }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: { omniroute: { apiKey: "secret-key" } },
+        },
+      } as never,
+      model: "embedding-model",
+    });
+
+    expect(result.provider).toBeDefined();
+    await expect(result.provider!.embedBatch(["first", "second"])).rejects.toThrow(error);
+  });
+
   it("returns empty embedding batches without contacting OmniRoute", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
