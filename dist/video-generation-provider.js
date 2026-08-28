@@ -14,6 +14,14 @@ function requireVideoModel(model) {
 function resolveConfiguredBaseUrl(req) {
     return resolveOmniRouteBaseUrl({ config: req.cfg });
 }
+function resolveVideoMimeType(item) {
+    if (typeof item.mime_type === "string" && item.mime_type.trim()) {
+        return item.mime_type.trim();
+    }
+    return typeof item.format === "string" && item.format.trim().toLowerCase() === "webp"
+        ? "image/webp"
+        : "video/mp4";
+}
 function parseVideoResponse(payload) {
     if (!payload || typeof payload !== "object" || !Array.isArray(payload.data)) {
         throw new Error("OmniRoute video generation response missing video data");
@@ -23,17 +31,28 @@ function parseVideoResponse(payload) {
             throw new Error("OmniRoute video generation response malformed");
         }
         const item = entry;
-        if (typeof item.url !== "string" || !item.url.trim()) {
-            throw new Error("OmniRoute video generation response missing video URL");
+        const mimeType = resolveVideoMimeType(item);
+        const fileName = typeof item.file_name === "string" && item.file_name.trim()
+            ? { fileName: item.file_name }
+            : {};
+        if (typeof item.url === "string" && item.url.trim()) {
+            return {
+                url: item.url,
+                mimeType,
+                ...fileName,
+            };
+        }
+        if (typeof item.b64_json !== "string" || !item.b64_json.trim()) {
+            throw new Error("OmniRoute video generation response missing video data");
+        }
+        const buffer = Buffer.from(item.b64_json, "base64");
+        if (buffer.length === 0) {
+            throw new Error("OmniRoute video generation response missing video data");
         }
         return {
-            url: item.url,
-            mimeType: typeof item.mime_type === "string" && item.mime_type.trim()
-                ? item.mime_type
-                : "video/mp4",
-            ...(typeof item.file_name === "string" && item.file_name.trim()
-                ? { fileName: item.file_name }
-                : {}),
+            buffer,
+            mimeType,
+            ...fileName,
         };
     });
 }

@@ -247,7 +247,8 @@ export const OMNIROUTE_JSON_READ_OPTIONS = {
     chunkTimeoutMs: 30_000,
   },
   videoGeneration: {
-    maxBytes: 4 * MEBIBYTE,
+    // A default 16 MiB video expands to about 21.4 MiB in base64, plus JSON.
+    maxBytes: 24 * MEBIBYTE,
     chunkTimeoutMs: 30_000,
   },
   webSearch: {
