@@ -1,11 +1,58 @@
+# Apply labels only where the changed paths or branch name make their scope
+# unambiguous. Priority, triage state, roadmap commitment, and contribution
+# suitability remain maintainer decisions.
+
 documentation:
   - changed-files:
       - any-glob-to-any-file:
-          - "README.md"
-          - "OMNIROUTE_SUPPORT.md"
+          - "**/*.md"
           - "LICENSE"
-          - "docs/**"
+          - ".github/ISSUE_TEMPLATE/**"
+          - ".github/pull_request_template.md"
 
 ci:
   - changed-files:
-      - any-glob-to-any-file: ".github/**"
+      - any-glob-to-any-file:
+          - ".github/labeler.yml"
+          - ".github/scripts/**"
+          - ".github/workflows/**"
+
+release:
+  - any:
+      - head-branch:
+          - "(^|/)(?:release|chore-release)(?:[-/]|$)"
+      - changed-files:
+          - any-glob-to-any-file:
+              - "docs/releases/**"
+              - ".github/workflows/publish.yml"
+
+dependencies:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "package.json"
+          - "pnpm-lock.yaml"
+
+tests:
+  - changed-files:
+      - any-glob-to-any-file:
+          - "*.test.ts"
+          - "**/*.test.ts"
+
+compatibility:
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/upstream-compatibility.yml"
+          - ".github/scripts/upstream-compatibility-probe.mjs"
+          - "provider-compat.ts"
+
+feature:
+  - head-branch:
+      - "(^|/)(?:feat|feature)(?:[-/]|$)"
+
+enhancement:
+  - head-branch:
+      - "(^|/)(?:enhance|improve)(?:[-/]|$)"
+
+bug:
+  - head-branch:
+      - "(^|/)(?:fix|bugfix|bug)(?:[-/]|$)"
