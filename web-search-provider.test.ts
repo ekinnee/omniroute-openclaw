@@ -215,6 +215,7 @@ describe("OmniRoute web search provider", () => {
     authMock.resolveOmniRouteApiKey.mockRejectedValue(
       createAuthError({ code: "missing-api-key", name: "MissingProviderAuthError" }),
     );
+    vi.stubEnv("OMNIROUTE_API_KEY", "");
     const fetchMock = vi.spyOn(globalThis, "fetch");
     const tool = createTool();
 
