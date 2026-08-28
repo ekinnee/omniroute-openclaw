@@ -111,14 +111,29 @@ function parseEmbeddingVectors(payload: unknown, expectedCount: number): number[
           : index,
         embedding,
       };
-    })
-    .sort((left, right) => left.index - right.index);
+    });
   if (data.length !== expectedCount) {
     throw new Error(
       `OmniRoute embeddings response returned ${data.length} vectors for ${expectedCount} inputs`,
     );
   }
-  return data.map((item) => item.embedding);
+  const vectors = new Map<number, number[]>();
+  for (const item of data) {
+    if (!Number.isSafeInteger(item.index) || item.index < 0 || item.index >= expectedCount) {
+      throw new Error(`OmniRoute embeddings response has invalid index ${item.index}`);
+    }
+    if (vectors.has(item.index)) {
+      throw new Error(`OmniRoute embeddings response has duplicate vector index ${item.index}`);
+    }
+    vectors.set(item.index, item.embedding);
+  }
+  return Array.from({ length: expectedCount }, (_, index) => {
+    const embedding = vectors.get(index);
+    if (!embedding) {
+      throw new Error(`OmniRoute embeddings response missing vector index ${index}`);
+    }
+    return embedding;
+  });
 }
 
 async function requestEmbeddings(
