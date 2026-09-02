@@ -107,12 +107,10 @@ function resolveReasoningCapabilities(entry) {
     const explicitEfforts = hasEffortTiers
         ? normalizeReasoningEfforts(capabilities.effort_tiers)
         : [];
+    // A thinking selector requires advertised effort_tiers. supportsThinking
+    // without tiers still marks the model as reasoning-capable.
     const controllable = explicitThinking === false ? false : explicitThinking === true || explicitEfforts.length > 0;
-    const supportedEfforts = controllable
-        ? hasEffortTiers
-            ? explicitEfforts
-            : [...OMNIROUTE_CANONICAL_EFFORTS]
-        : [];
+    const supportedEfforts = hasEffortTiers && controllable ? explicitEfforts : [];
     return {
         reasoning: hasCapability(entry, "reasoning") || controllable,
         supportedEfforts,
@@ -226,6 +224,8 @@ function buildOmniRouteModelFromCatalogEntry(entry) {
     }
     const reasoningCapabilities = resolveReasoningCapabilities(entry);
     const hasReasoningControls = reasoningCapabilities.supportedEfforts.length > 0;
+    const contextWindow = readPositiveNumber(entry.context_length, entry.max_input_tokens, entry.contextWindow);
+    const maxTokens = readPositiveNumber(entry.max_output_tokens, entry.maxOutputTokens);
     return {
         id,
         name: (typeof entry.name === "string" && entry.name.trim()) ||
@@ -234,9 +234,8 @@ function buildOmniRouteModelFromCatalogEntry(entry) {
         reasoning: reasoningCapabilities.reasoning,
         input: normalizeInputModalities(entry),
         cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-        contextWindow: readPositiveNumber(entry.context_length, entry.max_input_tokens, entry.contextWindow) ??
-            128_000,
-        maxTokens: readPositiveNumber(entry.max_output_tokens, entry.maxOutputTokens) ?? 16_384,
+        ...(contextWindow !== undefined ? { contextWindow } : {}),
+        ...(maxTokens !== undefined ? { maxTokens } : {}),
         ...(reasoningCapabilities.reasoning
             ? { thinkingLevelMap: buildThinkingLevelMap(reasoningCapabilities.supportedEfforts) }
             : {}),
@@ -415,6 +414,8 @@ export async function buildOmniRouteCatalog(ctx) {
     if (!provider) {
         return null;
     }
+    // Omitted contextWindow/maxTokens stay unknown. OpenClaw 2026.7.1 still
+    // types those catalog fields as required numbers; later SDK rows omit them.
     return {
         provider,
     };

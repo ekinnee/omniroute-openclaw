@@ -256,11 +256,19 @@ describe("omniroute provider plugin", () => {
     expect(models[0]).toMatchObject({
       id: "auto",
       reasoning: true,
-      compat: {
-        supportsReasoningEffort: true,
-        supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-      },
-      thinkingLevelMap: { off: "none", low: "low", xhigh: "xhigh", max: null },
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    });
+    expect(models[0].compat?.supportsReasoningEffort).not.toBe(true);
+    expect(models[0].compat?.supportedReasoningEfforts).toBeUndefined();
+    expect(models[0].thinkingLevelMap).toEqual({
+      off: null,
+      minimal: null,
+      low: null,
+      medium: null,
+      high: null,
+      xhigh: null,
+      max: null,
     });
   });
 
@@ -311,7 +319,7 @@ describe("omniroute provider plugin", () => {
     }
   });
 
-  it("uses explicit thinking effort tiers exactly and canonical tiers only for controllable thinking", async () => {
+  it("uses explicit thinking effort tiers exactly and does not invent a selector without them", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       mockCatalogResponse({
@@ -353,11 +361,67 @@ describe("omniroute provider plugin", () => {
     expect(models[1]).toMatchObject({
       id: "provider/canonical-thinking",
       reasoning: true,
-      compat: {
-        supportsReasoningEffort: true,
-        supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-      },
     });
+    expect(models[1].compat?.supportsReasoningEffort).not.toBe(true);
+    expect(models[1].compat?.supportedReasoningEfforts).toBeUndefined();
+    expect(models[1].thinkingLevelMap).toEqual({
+      off: null,
+      minimal: null,
+      low: null,
+      medium: null,
+      high: null,
+      xhigh: null,
+      max: null,
+    });
+    expect(models[1]).not.toHaveProperty("contextWindow");
+    expect(models[1]).not.toHaveProperty("maxTokens");
+  });
+
+  it("keeps omitted chat limits unknown and matches catalog-audit missing fields", async () => {
+    const payload = {
+      data: [
+        {
+          id: "provider/canonical-thinking",
+          type: "chat",
+          capabilities: { supportsThinking: true },
+        },
+        {
+          id: "provider/sized-chat",
+          type: "chat",
+          context_length: 42_000,
+          max_output_tokens: 3_000,
+        },
+      ],
+    };
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    const { buildOmniRouteCatalogAuditReport } = await import("./catalog-audit.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockCatalogResponse(payload));
+
+    const models = await fetchOmniRouteChatModels({ baseUrl: "http://localhost:20128/v1" });
+    const report = buildOmniRouteCatalogAuditReport({
+      baseUrl: "http://localhost:20128/v1",
+      payload,
+    });
+
+    expect(models[0]).toMatchObject({ id: "provider/canonical-thinking", reasoning: true });
+    expect(models[0]).not.toHaveProperty("contextWindow");
+    expect(models[0]).not.toHaveProperty("maxTokens");
+    expect(models[0].compat?.supportsReasoningEffort).not.toBe(true);
+    expect(models[0].contextWindow).not.toBe(128_000);
+    expect(models[0].maxTokens).not.toBe(16_384);
+    expect(models[1]).toMatchObject({
+      id: "provider/sized-chat",
+      contextWindow: 42_000,
+      maxTokens: 3_000,
+    });
+
+    const unknownLimits = report.models.find((model) => model.id === "provider/canonical-thinking");
+    const sized = report.models.find((model) => model.id === "provider/sized-chat");
+    expect(unknownLimits?.missing).toEqual(
+      expect.arrayContaining(["context_window", "max_output_tokens", "capabilities.effort_tiers"]),
+    );
+    expect(sized?.missing).not.toContain("context_window");
+    expect(sized?.missing).not.toContain("max_output_tokens");
   });
 
   it("projects and admits only a fetched model's exact reasoning subset end to end", async () => {
@@ -617,6 +681,7 @@ describe("omniroute provider plugin", () => {
       contextWindow: 200_000,
       reasoning: false,
     });
+    expect(models[0]).not.toHaveProperty("maxTokens");
     expect(models[1]).toMatchObject({
       id: "openrouter/google/gemini-pro",
       input: ["text", "image"],
