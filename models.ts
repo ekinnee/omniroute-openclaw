@@ -11,8 +11,8 @@ export type OmniRouteModelDefinition = {
     cacheRead: number;
     cacheWrite: number;
   };
-  contextWindow: number;
-  maxTokens: number;
+  contextWindow?: number;
+  maxTokens?: number;
   thinkingLevelMap?: Partial<
     Record<"off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max", string | null>
   >;

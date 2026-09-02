@@ -53,7 +53,24 @@ describe("OmniRoute catalog audit", () => {
     });
     expect(report.models[0]?.advertised).not.toHaveProperty("context_length");
     expect(report.models[0]?.missing).toContain("context_window");
+    expect(report.models[0]?.missing).toContain("max_output_tokens");
     expect(report.models[0]?.missing).not.toContain("capabilities.reasoning");
+    expect(report.models[0]?.missing).not.toContain("capabilities.effort_tiers");
+  });
+
+  it("flags thinking without effort_tiers as missing selector metadata", () => {
+    const report = buildOmniRouteCatalogAuditReport({
+      baseUrl: "https://gateway.example/v1",
+      payload: {
+        data: [{ id: "provider/canonical-thinking", capabilities: { supportsThinking: true } }],
+      },
+    });
+
+    expect(report.models[0]?.missing).toEqual(
+      expect.arrayContaining(["context_window", "max_output_tokens", "capabilities.effort_tiers"]),
+    );
+    expect(JSON.stringify(report)).not.toContain("128000");
+    expect(JSON.stringify(report)).not.toContain("16384");
   });
 
   it("uses configured base URL unless it is the default, then permits the environment override", () => {
