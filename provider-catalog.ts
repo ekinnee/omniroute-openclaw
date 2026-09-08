@@ -356,6 +356,10 @@ function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry) {
     entry.contextWindow,
   );
   const maxTokens = readPositiveNumber(entry.max_output_tokens, entry.maxOutputTokens);
+  // OpenClaw supplies guessed limits for incomplete rows. Keep them audit-only.
+  if (contextWindow === undefined || maxTokens === undefined) {
+    return null;
+  }
 
   return {
     id,
@@ -366,8 +370,8 @@ function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry) {
     reasoning: reasoningCapabilities.reasoning,
     input: normalizeInputModalities(entry),
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    ...(contextWindow !== undefined ? { contextWindow } : {}),
-    ...(maxTokens !== undefined ? { maxTokens } : {}),
+    contextWindow,
+    maxTokens,
     ...(reasoningCapabilities.reasoning
       ? { thinkingLevelMap: buildThinkingLevelMap(reasoningCapabilities.supportedEfforts) }
       : {}),
@@ -636,9 +640,7 @@ export async function buildOmniRouteCatalog(
   if (!provider) {
     return null;
   }
-  // Omitted contextWindow/maxTokens stay unknown. OpenClaw 2026.7.1 still
-  // types those catalog fields as required numbers; later SDK rows omit them.
   return {
     provider,
-  } as ProviderCatalogResult;
+  };
 }
