@@ -7,6 +7,7 @@ import {
 
 describe("OmniRoute usage reporting", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -118,6 +119,108 @@ describe("OmniRoute usage reporting", () => {
       displayName: "OmniRoute",
       windows: [],
       error: "Usage visibility is disabled for this OmniRoute API key",
+    });
+  });
+
+  it("cancels an oversized usage body instead of buffering it first", async () => {
+    let cancelled = false;
+    let pulls = 0;
+    const chunk = new TextEncoder().encode("x".repeat(16_384));
+    const body = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulls += 1;
+        controller.enqueue(chunk);
+        if (pulls === 8) controller.close();
+      },
+      cancel() {
+        cancelled = true;
+      },
+    });
+
+    const snapshot = await fetchOmniRouteUsage({
+      config: {},
+      env: {},
+      token: "usage-key",
+      timeoutMs: 5_000,
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { status: 200 })),
+    } as never);
+
+    expect(snapshot).toEqual({
+      provider: "omniroute",
+      displayName: "OmniRoute",
+      windows: [],
+      error: "OmniRoute usage response is too large",
+    });
+    expect(cancelled).toBe(true);
+    expect(pulls).toBeLessThan(8);
+  });
+
+  it("cancels a stalled usage body and returns the unavailable snapshot", async () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
+    const snapshotPromise = fetchOmniRouteUsage({
+      config: {},
+      env: {},
+      token: "usage-key",
+      timeoutMs: 50,
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(new Response(body)),
+    } as never);
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(await snapshotPromise).toEqual({
+      provider: "omniroute",
+      displayName: "OmniRoute",
+      windows: [],
+      error: "OmniRoute usage endpoint is unavailable",
+    });
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { suffix: "", oversized: false },
+    { suffix: "x", oversized: true },
+  ])("enforces the UTF-8 byte limit (oversized: $oversized)", async ({ suffix, oversized }) => {
+    const text = "é".repeat(16_384) + suffix;
+    const snapshot = await fetchOmniRouteUsage({
+      config: {},
+      env: {},
+      token: "usage-key",
+      timeoutMs: 5_000,
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(new Response(text)),
+    } as never);
+
+    expect(snapshot).toEqual({
+      provider: "omniroute",
+      displayName: "OmniRoute",
+      windows: [],
+      ...(oversized
+        ? { error: "OmniRoute usage response is too large" }
+        : { summary: text }),
+    });
+  });
+
+  it("converts usage body-read failures into the unavailable snapshot", async () => {
+    const body = new ReadableStream<Uint8Array>({
+      pull() {
+        return Promise.reject(new Error("body read failed"));
+      },
+    });
+
+    const snapshot = await fetchOmniRouteUsage({
+      config: {},
+      env: {},
+      token: "usage-key",
+      timeoutMs: 5_000,
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(new Response(body, { status: 200 })),
+    } as never);
+
+    expect(snapshot).toEqual({
+      provider: "omniroute",
+      displayName: "OmniRoute",
+      windows: [],
+      error: "OmniRoute usage endpoint is unavailable",
     });
   });
 });

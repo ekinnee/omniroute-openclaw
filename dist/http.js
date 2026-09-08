@@ -235,6 +235,10 @@ async function readOmniRouteJsonBytes(response, operation, maxBytes, chunkTimeou
     }
     return bytes;
 }
+export async function readOmniRouteText(response, operation, options = DEFAULT_OMNIROUTE_JSON_READ_OPTIONS) {
+    const bytes = await readOmniRouteJsonBytes(response, operation, options.maxBytes ?? DEFAULT_OMNIROUTE_JSON_READ_OPTIONS.maxBytes, options.chunkTimeoutMs ?? DEFAULT_OMNIROUTE_JSON_READ_OPTIONS.chunkTimeoutMs);
+    return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+}
 export async function readOmniRouteJson(response, operation, options = DEFAULT_OMNIROUTE_JSON_READ_OPTIONS) {
     // All provider responses must stay bounded. Endpoint-specific callers can
     // raise the default for known larger payloads, but never opt out of a limit.
