@@ -201,13 +201,11 @@ function resolveReasoningCapabilities(entry: OmniRouteModelEntry): {
   const explicitEfforts = hasEffortTiers
     ? normalizeReasoningEfforts(capabilities.effort_tiers)
     : [];
+  // A thinking selector requires advertised effort_tiers. supportsThinking
+  // without tiers still marks the model as reasoning-capable.
   const controllable =
     explicitThinking === false ? false : explicitThinking === true || explicitEfforts.length > 0;
-  const supportedEfforts = controllable
-    ? hasEffortTiers
-      ? explicitEfforts
-      : [...OMNIROUTE_CANONICAL_EFFORTS]
-    : [];
+  const supportedEfforts = hasEffortTiers && controllable ? explicitEfforts : [];
   return {
     reasoning: hasCapability(entry, "reasoning") || controllable,
     supportedEfforts,
@@ -352,6 +350,16 @@ function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry) {
 
   const reasoningCapabilities = resolveReasoningCapabilities(entry);
   const hasReasoningControls = reasoningCapabilities.supportedEfforts.length > 0;
+  const contextWindow = readPositiveNumber(
+    entry.context_length,
+    entry.max_input_tokens,
+    entry.contextWindow,
+  );
+  const maxTokens = readPositiveNumber(entry.max_output_tokens, entry.maxOutputTokens);
+  // OpenClaw supplies guessed limits for incomplete rows. Keep them audit-only.
+  if (contextWindow === undefined || maxTokens === undefined) {
+    return null;
+  }
 
   return {
     id,
@@ -362,10 +370,8 @@ function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry) {
     reasoning: reasoningCapabilities.reasoning,
     input: normalizeInputModalities(entry),
     cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-    contextWindow:
-      readPositiveNumber(entry.context_length, entry.max_input_tokens, entry.contextWindow) ??
-      128_000,
-    maxTokens: readPositiveNumber(entry.max_output_tokens, entry.maxOutputTokens) ?? 16_384,
+    contextWindow,
+    maxTokens,
     ...(reasoningCapabilities.reasoning
       ? { thinkingLevelMap: buildThinkingLevelMap(reasoningCapabilities.supportedEfforts) }
       : {}),

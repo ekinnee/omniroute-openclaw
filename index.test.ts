@@ -217,10 +217,14 @@ describe("omniroute provider plugin", () => {
             capabilities: { tool_calling: true, reasoning: true },
           },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "nebius/Qwen/Qwen3-Embedding-8B",
             type: "embedding",
           },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "openai/dall-e-3",
             type: "image",
           },
@@ -256,11 +260,19 @@ describe("omniroute provider plugin", () => {
     expect(models[0]).toMatchObject({
       id: "auto",
       reasoning: true,
-      compat: {
-        supportsReasoningEffort: true,
-        supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-      },
-      thinkingLevelMap: { off: "none", low: "low", xhigh: "xhigh", max: null },
+      contextWindow: 128_000,
+      maxTokens: 16_384,
+    });
+    expect(models[0].compat?.supportsReasoningEffort).not.toBe(true);
+    expect(models[0].compat?.supportedReasoningEfforts).toBeUndefined();
+    expect(models[0].thinkingLevelMap).toEqual({
+      off: null,
+      minimal: null,
+      low: null,
+      medium: null,
+      high: null,
+      xhigh: null,
+      max: null,
     });
   });
 
@@ -269,9 +281,11 @@ describe("omniroute provider plugin", () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       mockCatalogResponse({
         data: [
-          { id: "auto", type: "chat" },
-          { id: "provider/reasoning-only", type: "chat", capabilities: { reasoning: true } },
+          { context_length: 42_000, max_output_tokens: 3_000, id: "auto", type: "chat" },
+          { context_length: 42_000, max_output_tokens: 3_000, id: "provider/reasoning-only", type: "chat", capabilities: { reasoning: true } },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "provider/thinking-disabled",
             type: "chat",
             capabilities: {
@@ -311,12 +325,14 @@ describe("omniroute provider plugin", () => {
     }
   });
 
-  it("uses explicit thinking effort tiers exactly and canonical tiers only for controllable thinking", async () => {
+  it("uses explicit thinking effort tiers exactly and does not invent a selector without them", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
       mockCatalogResponse({
         data: [
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "provider/explicit-tiers",
             type: "chat",
             capabilities: {
@@ -326,6 +342,8 @@ describe("omniroute provider plugin", () => {
             },
           },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "provider/canonical-thinking",
             type: "chat",
             capabilities: { supportsThinking: true },
@@ -353,11 +371,61 @@ describe("omniroute provider plugin", () => {
     expect(models[1]).toMatchObject({
       id: "provider/canonical-thinking",
       reasoning: true,
-      compat: {
-        supportsReasoningEffort: true,
-        supportedReasoningEfforts: ["none", "low", "medium", "high", "xhigh"],
-      },
     });
+    expect(models[1].compat?.supportsReasoningEffort).not.toBe(true);
+    expect(models[1].compat?.supportedReasoningEfforts).toBeUndefined();
+    expect(models[1].thinkingLevelMap).toEqual({
+      off: null,
+      minimal: null,
+      low: null,
+      medium: null,
+      high: null,
+      xhigh: null,
+      max: null,
+    });
+    expect(models[1]).toMatchObject({ contextWindow: 42_000, maxTokens: 3_000 });
+  });
+
+  it("excludes omitted chat limits while retaining catalog-audit missing fields", async () => {
+    const payload = {
+      data: [
+        {
+          id: "provider/canonical-thinking",
+          type: "chat",
+          capabilities: { supportsThinking: true },
+        },
+        {
+          id: "provider/sized-chat",
+          type: "chat",
+          context_length: 42_000,
+          max_output_tokens: 3_000,
+        },
+      ],
+    };
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    const { buildOmniRouteCatalogAuditReport } = await import("./catalog-audit.js");
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(mockCatalogResponse(payload));
+
+    const models = await fetchOmniRouteChatModels({ baseUrl: "http://localhost:20128/v1" });
+    const report = buildOmniRouteCatalogAuditReport({
+      baseUrl: "http://localhost:20128/v1",
+      payload,
+    });
+
+    expect(models).toHaveLength(1);
+    expect(models[0]).toMatchObject({
+      id: "provider/sized-chat",
+      contextWindow: 42_000,
+      maxTokens: 3_000,
+    });
+
+    const unknownLimits = report.models.find((model) => model.id === "provider/canonical-thinking");
+    const sized = report.models.find((model) => model.id === "provider/sized-chat");
+    expect(unknownLimits?.missing).toEqual(
+      expect.arrayContaining(["context_window", "max_output_tokens", "capabilities.effort_tiers"]),
+    );
+    expect(sized?.missing).not.toContain("context_window");
+    expect(sized?.missing).not.toContain("max_output_tokens");
   });
 
   it("projects and admits only a fetched model's exact reasoning subset end to end", async () => {
@@ -459,16 +527,22 @@ describe("omniroute provider plugin", () => {
       mockCatalogResponse({
         data: [
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "provider/empty-tiers",
             type: "chat",
             capabilities: { reasoning: true, supportsThinking: true, effort_tiers: [] },
           },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "provider/malformed-tiers",
             type: "chat",
             capabilities: { reasoning: true, supportsThinking: true, effort_tiers: "high" },
           },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "provider/unknown-tiers",
             type: "chat",
             capabilities: {
@@ -513,6 +587,8 @@ describe("omniroute provider plugin", () => {
       mockCatalogResponse({
         data: [
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "provider/reasoning-wire",
             type: "chat",
             capabilities: {
@@ -558,6 +634,7 @@ describe("omniroute provider plugin", () => {
       mockCatalogResponse({
         data: [
           {
+            max_output_tokens: 3_000,
             id: "auto/best-coding",
             object: "model",
             owned_by: "combo",
@@ -565,6 +642,8 @@ describe("omniroute provider plugin", () => {
             max_input_tokens: 200_000,
           },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "openrouter/google/gemini-pro",
             object: "model",
             owned_by: "openrouter",
@@ -575,12 +654,16 @@ describe("omniroute provider plugin", () => {
             capabilities: { vision: true },
           },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "openai/gpt-4.1",
             object: "model",
             supported_endpoints: ["/v1/chat/completions"],
             type: "image",
           },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "hf/diffusion-model",
             object: "model",
             owned_by: "huggingface",
@@ -589,12 +672,16 @@ describe("omniroute provider plugin", () => {
             output_modalities: ["image"],
           },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "nebius/Qwen/Qwen3-Embedding-8B",
             object: "model",
             owned_by: "nebius",
             supported_endpoints: ["embeddings"],
           },
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "audio/speech-only",
             object: "model",
             type: "audio",
@@ -617,6 +704,7 @@ describe("omniroute provider plugin", () => {
       contextWindow: 200_000,
       reasoning: false,
     });
+    expect(models[0].maxTokens).toBe(3_000);
     expect(models[1]).toMatchObject({
       id: "openrouter/google/gemini-pro",
       input: ["text", "image"],
@@ -630,6 +718,8 @@ describe("omniroute provider plugin", () => {
       mockCatalogResponse({
         data: [
           {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "if/kimi-k2",
             object: "model",
             owned_by: "inference.net",
@@ -847,7 +937,7 @@ describe("omniroute provider plugin", () => {
   it("applies configured request headers and alternate auth to live catalog discovery", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockCatalogResponse({ data: [{ id: "provider/guarded", type: "chat" }] }),
+      mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/guarded", type: "chat" }] }),
     );
 
     const provider = await buildLiveOmniRouteProvider(
@@ -971,10 +1061,10 @@ describe("omniroute provider plugin", () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ id: "provider/key-one", type: "chat" }] }))
-      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ id: "provider/key-two", type: "chat" }] }))
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/key-one", type: "chat" }] }))
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/key-two", type: "chat" }] }))
       .mockResolvedValueOnce(
-        mockCatalogResponse({ data: [{ id: "provider/profile-two", type: "chat" }] }),
+        mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/profile-two", type: "chat" }] }),
       );
     const baseUrl = "http://credential-isolation.example/v1";
 
@@ -998,10 +1088,10 @@ describe("omniroute provider plugin", () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ id: "provider/request-one", type: "chat" }] }))
-      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ id: "provider/request-two", type: "chat" }] }))
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/request-one", type: "chat" }] }))
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/request-two", type: "chat" }] }))
       .mockResolvedValueOnce(
-        mockCatalogResponse({ data: [{ id: "provider/request-private", type: "chat" }] }),
+        mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/request-private", type: "chat" }] }),
       );
     const baseUrl = "https://request-policy-cache.example/v1";
     const first = await buildLiveOmniRouteProvider(
@@ -1056,7 +1146,7 @@ describe("omniroute provider plugin", () => {
   it("uses the discovery credential for catalog fetches without replacing the runtime credential", async () => {
     const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockCatalogResponse({ data: [{ id: "provider/discovery-key", type: "chat" }] }),
+      mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/discovery-key", type: "chat" }] }),
     );
     const context = mockCatalogContext({
       baseUrl: "http://discovery-key.example/v1",
@@ -1111,7 +1201,7 @@ describe("omniroute provider plugin", () => {
   it("uses the provider API-key resolver when auth has no configured credential", async () => {
     const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockCatalogResponse({ data: [{ id: "provider/configured-key", type: "chat" }] }),
+      mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/configured-key", type: "chat" }] }),
     );
 
     const catalog = await buildOmniRouteCatalog(
@@ -1157,7 +1247,7 @@ describe("omniroute provider plugin", () => {
     const fetchMock = vi
       .spyOn(globalThis, "fetch")
       .mockResolvedValueOnce(mockCatalogResponse({ data: [] }))
-      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ id: "recovered-model", type: "chat" }] }));
+      .mockResolvedValueOnce(mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "recovered-model", type: "chat" }] }));
     const context = mockCatalogContext({
       baseUrl: "http://empty-catalog-cache.example/v1",
       apiKey: "secret-key",
@@ -1182,7 +1272,7 @@ describe("omniroute provider plugin", () => {
       .spyOn(globalThis, "fetch")
       .mockReturnValueOnce(expiredResponse)
       .mockResolvedValueOnce(
-        mockCatalogResponse({ data: [{ id: "replacement-model", type: "chat" }] }),
+        mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "replacement-model", type: "chat" }] }),
       );
     const context = mockCatalogContext({
       baseUrl: "http://expired-cache-race.example/v1",
@@ -1207,7 +1297,7 @@ describe("omniroute provider plugin", () => {
   it("uses OMNIROUTE_BASE_URL when no config base URL is set", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockCatalogResponse({ data: [{ id: "provider/env-url", type: "chat" }] }),
+      mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/env-url", type: "chat" }] }),
     );
 
     const catalog = await buildLiveOmniRouteProvider(
@@ -1223,7 +1313,7 @@ describe("omniroute provider plugin", () => {
   it("uses OMNIROUTE_BASE_URL when config only has the default base URL", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockCatalogResponse({ data: [{ id: "provider/env-url", type: "chat" }] }),
+      mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/env-url", type: "chat" }] }),
     );
 
     const catalog = await buildLiveOmniRouteProvider(
@@ -1240,7 +1330,7 @@ describe("omniroute provider plugin", () => {
   it("keeps the environment-resolved base URL in the returned catalog provider", async () => {
     const { buildOmniRouteCatalog } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockCatalogResponse({ data: [{ id: "provider/env-url", type: "chat" }] }),
+      mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/env-url", type: "chat" }] }),
     );
 
     const catalog = await buildOmniRouteCatalog(
@@ -1259,7 +1349,7 @@ describe("omniroute provider plugin", () => {
   it("prefers config base URL over OMNIROUTE_BASE_URL", async () => {
     const { buildLiveOmniRouteProvider } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
-      mockCatalogResponse({ data: [{ id: "provider/config-url", type: "chat" }] }),
+      mockCatalogResponse({ data: [{ context_length: 42_000, max_output_tokens: 3_000, id: "provider/config-url", type: "chat" }] }),
     );
 
     const catalog = await buildLiveOmniRouteProvider(
