@@ -7,6 +7,7 @@ import {
 
 describe("OmniRoute usage reporting", () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
@@ -129,6 +130,7 @@ describe("OmniRoute usage reporting", () => {
       pull(controller) {
         pulls += 1;
         controller.enqueue(chunk);
+        if (pulls === 8) controller.close();
       },
       cancel() {
         cancelled = true;
@@ -150,7 +152,53 @@ describe("OmniRoute usage reporting", () => {
       error: "OmniRoute usage response is too large",
     });
     expect(cancelled).toBe(true);
-    expect(pulls).toBeLessThan(10);
+    expect(pulls).toBeLessThan(8);
+  });
+
+  it("cancels a stalled usage body and returns the unavailable snapshot", async () => {
+    vi.useFakeTimers();
+    const cancel = vi.fn();
+    const body = new ReadableStream<Uint8Array>({ cancel });
+    const snapshotPromise = fetchOmniRouteUsage({
+      config: {},
+      env: {},
+      token: "usage-key",
+      timeoutMs: 50,
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(new Response(body)),
+    } as never);
+
+    await vi.advanceTimersByTimeAsync(50);
+
+    expect(await snapshotPromise).toEqual({
+      provider: "omniroute",
+      displayName: "OmniRoute",
+      windows: [],
+      error: "OmniRoute usage endpoint is unavailable",
+    });
+    expect(cancel).toHaveBeenCalledOnce();
+  });
+
+  it.each([
+    { suffix: "", oversized: false },
+    { suffix: "x", oversized: true },
+  ])("enforces the UTF-8 byte limit (oversized: $oversized)", async ({ suffix, oversized }) => {
+    const text = "é".repeat(16_384) + suffix;
+    const snapshot = await fetchOmniRouteUsage({
+      config: {},
+      env: {},
+      token: "usage-key",
+      timeoutMs: 5_000,
+      fetchFn: vi.fn<typeof fetch>().mockResolvedValue(new Response(text)),
+    } as never);
+
+    expect(snapshot).toEqual({
+      provider: "omniroute",
+      displayName: "OmniRoute",
+      windows: [],
+      ...(oversized
+        ? { error: "OmniRoute usage response is too large" }
+        : { summary: text }),
+    });
   });
 
   it("converts usage body-read failures into the unavailable snapshot", async () => {
