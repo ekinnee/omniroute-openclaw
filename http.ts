@@ -323,6 +323,20 @@ async function readOmniRouteJsonBytes(
   return bytes;
 }
 
+export async function readOmniRouteText(
+  response: Response,
+  operation: string,
+  options: OmniRouteJsonReadOptions = DEFAULT_OMNIROUTE_JSON_READ_OPTIONS,
+): Promise<string> {
+  const bytes = await readOmniRouteJsonBytes(
+    response,
+    operation,
+    options.maxBytes ?? DEFAULT_OMNIROUTE_JSON_READ_OPTIONS.maxBytes,
+    options.chunkTimeoutMs ?? DEFAULT_OMNIROUTE_JSON_READ_OPTIONS.chunkTimeoutMs,
+  );
+  return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
+}
+
 export async function readOmniRouteJson(
   response: Response,
   operation: string,

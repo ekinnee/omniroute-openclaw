@@ -76,6 +76,7 @@ export declare const OMNIROUTE_JSON_READ_OPTIONS: {
         readonly chunkTimeoutMs: 30000;
     };
 };
+export declare function readOmniRouteText(response: Response, operation: string, options?: OmniRouteJsonReadOptions): Promise<string>;
 export declare function readOmniRouteJson(response: Response, operation: string, options?: OmniRouteJsonReadOptions): Promise<unknown>;
 export declare function assertOmniRouteOk(response: Response, operation: string): Promise<void>;
 export {};

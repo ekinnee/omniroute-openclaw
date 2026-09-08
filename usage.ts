@@ -13,6 +13,7 @@ import {
   normalizeOmniRouteBaseUrl,
   resolveOmniRouteBaseUrl,
 } from "./base-url.js";
+import { readOmniRouteText } from "./http.js";
 
 const MAX_USAGE_RESPONSE_CHARS = 32_768;
 
@@ -84,9 +85,18 @@ export async function fetchOmniRouteUsage(
     return errorSnapshot(`OmniRoute usage endpoint returned HTTP ${response.status}`);
   }
 
-  const text = await response.text();
-  if (text.length > MAX_USAGE_RESPONSE_CHARS) {
-    return errorSnapshot("OmniRoute usage response is too large");
+  let text: string;
+  try {
+    text = await readOmniRouteText(response, "OmniRoute usage", {
+      maxBytes: MAX_USAGE_RESPONSE_CHARS,
+      chunkTimeoutMs: ctx.timeoutMs,
+    });
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (message.includes("response exceeded")) {
+      return errorSnapshot("OmniRoute usage response is too large");
+    }
+    return errorSnapshot("OmniRoute usage endpoint is unavailable");
   }
 
   const summary = normalizeUsageSummary(text);
