@@ -60,6 +60,10 @@ Set the OmniRoute gateway URL in your OpenClaw config. Include the `/v1` path; t
 
 The empty `models` array is intentional: OpenClaw requires it for an authored custom provider, and the plugin supplies the authenticated live models during discovery. For a LAN-hosted gateway, substitute its reachable host and port. `models.providers.omniroute.baseUrl` is the durable configuration option; `OMNIROUTE_BASE_URL` is the fallback when that setting is absent or still the public localhost default.
 
+### Transport TLS limitation
+
+For plugin-owned discovery, catalog audit, embeddings, image/video generation, and search requests, target TLS overrides in `models.providers.omniroute.request.tls` cannot be combined with `request.proxy.mode: "explicit-proxy"`. The plugin rejects this combination before making the request because the guarded SDK transport cannot represent independent target TLS settings for an explicit proxy. Direct and `env-proxy` transport retain support for target TLS overrides. This does not change the compatibility floor or OpenClaw-owned chat transport.
+
 ### Catalog Metadata Audit
 
 The plugin package includes a read-only catalog audit command. It loads the same OpenClaw configuration and agent-scoped OmniRoute credentials, performs `GET /v1/models`, and reports only metadata the gateway actually advertised.

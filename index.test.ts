@@ -1724,7 +1724,7 @@ describe("omniroute provider plugin", () => {
     expect(apiKey).toBe("ordered-first-b");
   });
 
-  it("preserves configured request auth, headers, TLS, and proxy policy", async () => {
+  it.each(["direct", "env-proxy"])("preserves configured auth, headers, and target TLS with %s transport", async (mode) => {
     const { resolveOmniRouteHttpRequestConfig } = await import("./http.js");
     const resolved = resolveOmniRouteHttpRequestConfig({
       baseUrl: "https://gateway.example/v1",
@@ -1744,11 +1744,10 @@ describe("omniroute provider plugin", () => {
           serverName: "gateway.example",
           insecureSkipVerify: false,
         },
-        proxy: {
-          mode: "explicit-proxy",
-          url: "http://proxy.example:8080",
+        proxy: mode === "env-proxy" ? {
+          mode,
           tls: { ca: "proxy-ca" },
-        },
+        } : undefined,
       },
       defaultHeaders: { Authorization: "Bearer default" },
     });
@@ -1757,10 +1756,65 @@ describe("omniroute provider plugin", () => {
     expect(resolved.headers.get("X-Gateway-Token")).toBe("Token request-secret");
     expect(resolved.headers.get("Authorization")).toBeNull();
     expect(resolved.dispatcherPolicy).toEqual({
+      mode,
+      connect: {
+        ca: "target-ca",
+        cert: "target-cert",
+        key: "target-key",
+        servername: "gateway.example",
+        rejectUnauthorized: true,
+      },
+      ...(mode === "env-proxy" ? { proxyTls: { ca: "proxy-ca" } } : {}),
+    });
+  });
+
+  it.each([undefined, {}])("preserves explicit proxy policy without effective target TLS (%j)", async (tls) => {
+    const { resolveOmniRouteHttpRequestConfig } = await import("./http.js");
+    const resolved = resolveOmniRouteHttpRequestConfig({
+      baseUrl: "https://gateway.example/v1",
+      defaultBaseUrl: "http://localhost:20128/v1",
+      request: {
+        tls,
+        proxy: {
+          mode: "explicit-proxy",
+          url: "http://proxy.example:8080",
+          tls: { ca: "proxy-ca" },
+        },
+      },
+    });
+    expect(resolved.dispatcherPolicy).toEqual({
       mode: "explicit-proxy",
       proxyUrl: "http://proxy.example:8080",
       proxyTls: { ca: "proxy-ca" },
     });
+  });
+
+  it.each([
+    { ca: "target-ca" },
+    { cert: "target-cert" },
+    { key: "target-key" },
+    { passphrase: "target-passphrase" },
+    { serverName: "gateway.example" },
+    { insecureSkipVerify: false },
+  ])("rejects target TLS with an explicit proxy before catalog fetch (%j)", async (tls) => {
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    const { resolveOmniRouteHttpRequestConfig } = await import("./http.js");
+    const request = {
+      tls,
+      proxy: { mode: "explicit-proxy", url: "http://proxy.example:8080" },
+    };
+    const message = "models.providers.omniroute.request.tls is not supported with request.proxy.mode=explicit-proxy";
+    expect(() => resolveOmniRouteHttpRequestConfig({
+      baseUrl: "https://gateway.example/v1",
+      defaultBaseUrl: "http://localhost:20128/v1",
+      request,
+    })).toThrow(message);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(mockCatalogResponse({ data: [] }));
+    await expect(fetchOmniRouteChatModels({
+      baseUrl: "https://gateway.example/v1",
+      request,
+    })).rejects.toThrow(message);
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("rejects insecure TLS overrides", async () => {

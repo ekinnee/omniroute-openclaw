@@ -102,6 +102,12 @@ function readDispatcherPolicy(request: ProviderRequest | undefined): DispatcherP
     };
   }
   if (proxy.mode === "explicit-proxy" && typeof proxy.url === "string" && proxy.url.trim()) {
+    if (targetTls) {
+      throw new Error(
+        "models.providers.omniroute.request.tls is not supported with request.proxy.mode=explicit-proxy; " +
+        "the guarded transport cannot represent independent target TLS settings for an explicit proxy",
+      );
+    }
     return {
       mode: "explicit-proxy",
       proxyUrl: proxy.url.trim(),
