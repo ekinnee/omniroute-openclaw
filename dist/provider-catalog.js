@@ -251,7 +251,7 @@ function buildOmniRouteModelFromCatalogEntry(entry) {
                 }
                 : {}),
             supportsUsageInStreaming: true,
-            supportsTools: hasCapability(entry, "tool_calling") || undefined,
+            supportsTools: readCapabilityBoolean(entry, "tool_calling"),
         },
     };
 }
