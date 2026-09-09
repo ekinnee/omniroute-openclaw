@@ -276,6 +276,54 @@ describe("omniroute provider plugin", () => {
     });
   });
 
+  it.each([
+    { advertised: false, expected: false },
+    { advertised: true, expected: true },
+    { advertised: undefined, expected: undefined },
+    { advertised: "false", expected: undefined },
+  ])("preserves tool support $advertised through the completions transport", async ({ advertised, expected }) => {
+    const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
+    const { buildOpenAICompletionsParams } = await import(
+      "openclaw/plugin-sdk/provider-transport-runtime"
+    );
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
+        data: [{
+          id: "provider/tool-support",
+          type: "chat",
+          context_length: 8192,
+          max_output_tokens: 1024,
+          capabilities: { tool_calling: advertised },
+        }],
+      }),
+    );
+    const [catalogModel] = await fetchOmniRouteChatModels({
+      baseUrl: "http://localhost:20128/v1",
+    });
+    const payload = buildOpenAICompletionsParams({
+      ...catalogModel,
+      provider: "omniroute",
+      api: "openai-completions",
+      baseUrl: "http://localhost:20128/v1",
+    }, {
+      messages: [{ role: "user", content: "hello", timestamp: 0 }],
+      tools: [{
+        name: "fixture_tool",
+        description: "A fixture tool",
+        parameters: { type: "object", properties: {} },
+      }],
+    }, {});
+
+    expect(catalogModel.compat?.supportsTools).toBe(expected);
+    if (expected === false) {
+      expect(payload.tools).toBeUndefined();
+    } else {
+      expect(payload.tools).toEqual([
+        expect.objectContaining({ function: expect.objectContaining({ name: "fixture_tool" }) }),
+      ]);
+    }
+  });
+
   it("does not treat auto or reasoning-only models as controllable thinking models", async () => {
     const { fetchOmniRouteChatModels } = await import("./provider-catalog.js");
     vi.spyOn(globalThis, "fetch").mockResolvedValue(
