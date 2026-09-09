@@ -79,6 +79,7 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 
 ## Compatibility Notes
 
+- Plugin-owned guarded requests reject target `request.tls` overrides combined with `request.proxy.mode: "explicit-proxy"`, rather than silently dropping them. The guarded explicit-proxy policy in both OpenClaw 2026.7.1 and 2026.9.3 lacks an independent target TLS field; full support needs a public SDK contract. Direct and environment-proxy target TLS behavior is unchanged. This limitation applies to discovery, catalog audit, embeddings, image/video generation, and web search, not the separately owned chat or usage transports.
 - OmniRoute accepts standard bearer API keys and also URL token compatibility modes, but this plugin should prefer bearer auth through OpenClaw's provider credential handling.
 - `auto` is not special to this plugin. It is available only when the authenticated OmniRoute catalog advertises it, just like every other model or combo.
 - Embeddings deliberately do not default to `auto`. The selected model and requested dimensionality are part of vector index identity; routing an embedding request to a model with different dimensions can invalidate existing indexes or fail at query time.
