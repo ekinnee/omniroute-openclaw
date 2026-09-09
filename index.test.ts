@@ -1,5 +1,5 @@
 // OmniRoute provider plugin tests — standalone compatible
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { readFileSync, existsSync } from "node:fs";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -68,6 +68,12 @@ function mockCatalogResponse(payload: unknown, status = 200): Response {
 }
 
 describe("omniroute provider plugin", () => {
+  beforeAll(async () => {
+    // Cold SDK loading belongs to setup, not the first behavior test's deadline.
+    // Await it before any per-test fetch mocks can be installed or restored.
+    await import("./provider-catalog.js");
+  }, 30_000);
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
