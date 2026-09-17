@@ -15,13 +15,13 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Read-only catalog metadata audit: `omniroute-catalog-audit`
 - Provider quota usage: `GET /api/usage/om-usage`, scoped to the configured API key and its permitted connections
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
-- Image generation provider: `omniroute`, backed by `POST /v1/images/generations`
+- Image generation and editing provider: `omniroute`, backed by `POST /v1/images/generations` and `POST /v1/images/edits`
 - Video generation provider: `omniroute`, backed by `POST /v1/videos/generations`
 - Web search provider: `omniroute`, backed by `GET/POST /v1/search`
 - Current plugin version: `2.1.4`
-- Next planned capabilities: authenticated modality-specific model catalogs and image edits
+- Next planned capability: authenticated modality-specific model catalogs
 
-The text provider uses OmniRoute's authenticated live model catalog and filters the response to chat-capable rows. `GET /v1/models` is authoritative: preserve its IDs exactly, do not hardcode `auto` or any other combo/default, and do not synthesize a static fallback when discovery is unavailable. Chat rows lacking positive context and output limits are excluded from discovery until OmniRoute advertises both. No guessed windows such as 128k/16k are substituted. The catalog can differ by gateway upstream-provider configuration and API-key permissions. Embeddings and image generation require explicit models and likewise never synthesize `auto`. The current picker catalog is text-only; modality-specific catalog rows for image, video, music, and audio are planned.
+The text provider uses OmniRoute's authenticated live model catalog and filters the response to chat-capable rows. `GET /v1/models` is authoritative: preserve its IDs exactly, do not hardcode `auto` or any other combo/default, and do not synthesize a static fallback when discovery is unavailable. Chat rows lacking positive context and output limits are excluded from discovery until OmniRoute advertises both. No guessed windows such as 128k/16k are substituted. The catalog can differ by gateway upstream-provider configuration and API-key permissions. Embeddings, image generation, and image editing require explicit models and likewise never synthesize `auto`. The current picker catalog is text-only; modality-specific catalog rows for image, video, music, and audio are planned.
 
 Reasoning controls are projected only from returned capability metadata. A thinking selector requires explicit `effort_tiers`; `supportsThinking` alone does not invent canonical effort levels. OpenClaw's off state maps to `reasoning_effort: "none"`; supported non-off levels pass through using the returned effort metadata. OpenClaw continues to own the configured/session default when no level is explicitly selected. Temperature suppression and arbitrary provider-specific flags remain future transport-level work, rather than catalog metadata passed through by this plugin.
 
@@ -38,7 +38,7 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 | `/v1/files`, `/v1/batches` | Async embedding batch runtime (`EmbeddingProviderBatchRuntime`) | ⏳ Merged upstream in [OpenClaw #129625](https://github.com/openclaw/openclaw/pull/129625); pending a stable release and compatibility-floor decision ([tracking issue #58](https://github.com/ekinnee/omniroute-openclaw/issues/58)) |
 | `POST /v1/images/generations` | Image generation provider | ✅ Initial support |
 | `GET /api/usage/om-usage` | Provider usage snapshot (`usageProviders`) | ✅ Initial support when API-key usage visibility is enabled |
-| `POST /v1/images/edits` | Image generation/edit provider | 🔜 Next (part of ImageGenerationProvider edit capability) |
+| `POST /v1/images/edits` | Image editing | ✅ Supported with OmniRoute v3.8.11+ — one reference image with an edit-capable model; no masks or multiple references |
 | `GET/POST /v1/search` | Web search provider (`registerWebSearchProvider`) | ✅ Initial support |
 | `POST /v1/web/fetch` | Web fetch provider (`registerWebFetchProvider`) | 🔜 Planned |
 | `POST /v1/audio/speech` | Speech provider (`registerSpeechProvider`) | 🔜 Planned |
@@ -62,8 +62,8 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 4. Add authenticated modality-specific catalog rows through `registerModelCatalogProvider`, beginning with image/video/music and adding audio when the model metadata supports reliable classification. Preserve model IDs and provider-reported capability data; do not create fallback media models.
 5. Keep embedding model handling explicit: filter `GET /v1/models` to embedding-capable rows, preserve ids exactly, include dimensionality in runtime/cache identity when OpenClaw provides it, and fail clearly when no embedding model is configured.
 6. After the public async embedding-batch contract ships in a stable OpenClaw release, add provider-owned `runtime.batchEmbed` handling for OmniRoute's `/v1/files` and `/v1/batches`. Preserve input order, honor host polling and timeout controls, and return `null` only when the host should use its existing inline fallback. Treat this as embedding-specific support, not a generic file/batch API.
-7. Keep image generation explicit and generation-only for the first cut: filter `GET /v1/models` to image-capable rows, preserve ids exactly, pass size/count through to `/v1/images/generations`, and reject reference images until edits are implemented.
-8. Add image edits: extend the existing `ImageGenerationProvider` to support the `edit` capability, mapping to OmniRoute's `/v1/images/edits`.
+7. Keep image generation explicit: filter `GET /v1/models` to image-capable rows, preserve ids exactly, and pass size/count through to `/v1/images/generations`.
+8. ~~Add image edits~~ ✅ Done for OmniRoute v3.8.11 and newer: send one reference image as a JSON data URL to `/v1/images/edits`. Require an explicitly selected edit-capable OmniRoute model; masks and multiple reference images remain unsupported.
 9. ~~Add web search support~~ ✅ Done: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
 10. Add batch transcription (STT): register via `registerMediaUnderstandingProvider`, mapping to OmniRoute's multipart `POST /v1/audio/transcriptions`. Do not label or implement it as realtime transcription without a supported streaming endpoint.
 11. Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.
@@ -85,7 +85,7 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 - OmniRoute accepts standard bearer API keys and also URL token compatibility modes, but this plugin should prefer bearer auth through OpenClaw's provider credential handling.
 - `auto` is not special to this plugin. It is available only when the authenticated OmniRoute catalog advertises it, just like every other model or combo.
 - Embeddings deliberately do not default to `auto`. The selected model and requested dimensionality are part of vector index identity; routing an embedding request to a model with different dimensions can invalidate existing indexes or fail at query time.
-- Image generation deliberately does not default to `auto`. The selected model must be image-capable, and the first implementation supports text-to-image only.
+- Image generation and editing deliberately do not default to `auto`. The selected model must support the requested operation. Editing requires OmniRoute v3.8.11 or newer, accepts exactly one reference image, sends it as a JSON data URL to `/v1/images/edits`, and does not currently support masks or multiple references. This version requirement applies to image editing, not to the plugin's other capabilities.
 - OmniRoute's `/v1/models` includes chat, embedding, image, rerank, audio, moderation, video, music, and combo rows. The current text provider filters that source to chat-capable rows, the embedding provider filters it to embedding-capable rows, and the image generation provider filters it to image-capable rows; future capability providers must filter the same source by their own endpoint capability.
 - Base URL precedence should remain consistent for local, remote, Docker, and cloud-hosted OmniRoute instances.
 - Live discovery should be auth-gated and cached by normalized base URL, auth profile, and a non-reversible fingerprint of the effective discovery credential. There is no static model fallback for offline picker surfaces.

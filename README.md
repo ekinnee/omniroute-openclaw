@@ -101,7 +101,7 @@ The plugin does not default embeddings to `auto`. Embedding model and dimensiona
 
 ### Image Generation
 
-OmniRoute can serve OpenClaw image generation requests through `POST /v1/images/generations`.
+OmniRoute can serve OpenClaw image generation requests through `POST /v1/images/generations` and image edits through `POST /v1/images/edits`.
 Configure a specific image model from OmniRoute's `GET /v1/models` response:
 
 ```json5
@@ -116,7 +116,9 @@ Configure a specific image model from OmniRoute's `GET /v1/models` response:
 }
 ```
 
-The initial image support is text-to-image only. Image edits and reference images remain planned. The plugin does not default image generation to `auto`; use an image-capable model that OmniRoute advertises.
+Image editing requires OmniRoute v3.8.11 or newer. For an edit, supply exactly one reference image and select an OmniRoute model that supports image editing. The plugin sends the reference image as a data URL in a JSON request to `/v1/images/edits`. Masks and multiple reference images are not currently supported.
+
+The plugin does not default image generation or editing to `auto`; use a model that OmniRoute advertises for the requested operation.
 
 ### Web Search
 
@@ -145,7 +147,7 @@ The web search tool supports `query`, `count` (1-10), `freshness` (day/week/mont
 4. **Reasoning controls from metadata** — A thinking selector is exposed only when the returned row advertises explicit `effort_tiers`. `supportsThinking` without those tiers still marks the model as reasoning-capable, but it does not invent `none`/`low`/`medium`/`high`/`xhigh` controls. OpenClaw's off state is sent as `reasoning_effort: "none"`; supported non-off levels are passed through using the returned effort metadata. OpenClaw continues to own the configured/session default when no level is explicitly selected—the plugin does not invent another default.
 5. **OpenAI-compatible transport** — Text requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
 6. **Configured embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint and require a configured embedding model.
-7. **Configured image generation** — Image requests use OmniRoute's OpenAI-compatible `POST /v1/images/generations` endpoint with a configured image model.
+7. **Configured image generation and editing** — Image generation uses `POST /v1/images/generations`. Edits send one reference image as a JSON data URL to `POST /v1/images/edits`. Both require a configured OmniRoute model that supports the requested operation.
 8. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
 9. **Provider quota usage** — OpenClaw status and usage views can read OmniRoute's credential-scoped cached quota snapshot from `GET /api/usage/om-usage`. Enable usage visibility for that OmniRoute API key; a key without that permission reports an explicit unavailable status and never exposes other gateway connections.
 
@@ -168,7 +170,7 @@ capabilities mature.
 | Embeddings (`/v1/embeddings`) | ✅ Initial support |
 | Async embedding batches (`/v1/files` + `/v1/batches`) | ⏳ OpenClaw contract merged in [#129625](https://github.com/openclaw/openclaw/pull/129625); implement after it ships in a stable release ([tracking issue #58](https://github.com/ekinnee/omniroute-openclaw/issues/58)) |
 | Image generation (`/v1/images/generations`) | ✅ Initial support |
-| Image edits (`/v1/images/edits`) | 🔜 Next — extend the existing ImageGenerationProvider edit mode |
+| Image edits (`/v1/images/edits`) | ✅ Supported with OmniRoute v3.8.11+ — one reference image with an edit-capable model; no masks or multiple references |
 | Web search (`/v1/search`) | ✅ Initial support |
 | Web fetch (`/v1/web/fetch`) | 🔜 Planned |
 | Speech (`/v1/audio/speech`) | 🔜 Planned — text-to-speech provider |
