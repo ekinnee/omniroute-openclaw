@@ -166,6 +166,7 @@ capabilities mature.
 | Live model catalog (`GET /v1/models`) | ✅ Initial support |
 | Modality-specific model catalogs (`GET /v1/models`) | 🔜 Planned — publish authenticated image, video, music, and audio rows for OpenClaw pickers |
 | Embeddings (`/v1/embeddings`) | ✅ Initial support |
+| Async embedding batches (`/v1/files` + `/v1/batches`) | ⏳ OpenClaw contract merged in [#129625](https://github.com/openclaw/openclaw/pull/129625); implement after it ships in a stable release ([tracking issue #58](https://github.com/ekinnee/omniroute-openclaw/issues/58)) |
 | Image generation (`/v1/images/generations`) | ✅ Initial support |
 | Image edits (`/v1/images/edits`) | 🔜 Next — extend the existing ImageGenerationProvider edit mode |
 | Web search (`/v1/search`) | ✅ Initial support |
@@ -175,7 +176,7 @@ capabilities mature.
 | Video generation (`/v1/videos/generations`) | ✅ Initial support |
 | Music generation (`/v1/music/generations`) | 🔜 Planned |
 
-### Needs OpenClaw SDK PR (no plugin surface yet)
+### Needs a broader OpenClaw SDK surface
 
 | OmniRoute Endpoint | Notes |
 |---|---|
@@ -184,8 +185,7 @@ capabilities mature.
 | `/v1/messages` | Anthropic-compatible — no OpenClaw provider surface |
 | `/v1/rerank` | Cohere-compatible rerank — no OpenClaw provider surface |
 | `/v1/moderations` | OpenAI-compatible moderation — no OpenClaw provider surface |
-| `/v1/batches` | Batch processing — no OpenClaw provider surface |
-| `/v1/files` | File uploads — no OpenClaw provider surface |
+| `/v1/batches`, `/v1/files` | OpenClaw `main` now exposes an embedding-specific asynchronous batch runtime. Generic file and non-embedding batch operations still have no plugin surface. |
 
 ## Development
 

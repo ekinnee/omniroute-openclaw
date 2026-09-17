@@ -35,6 +35,7 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 | `GET /v1/models` | Authenticated image/video/music/audio catalog rows (`registerModelCatalogProvider`) | 🔜 Planned |
 | `POST /v1/chat/completions` | OpenAI-compatible chat provider | ✅ Initial support |
 | `POST /v1/embeddings` | Embedding provider | ✅ Initial support |
+| `/v1/files`, `/v1/batches` | Async embedding batch runtime (`EmbeddingProviderBatchRuntime`) | ⏳ Merged upstream in [OpenClaw #129625](https://github.com/openclaw/openclaw/pull/129625); pending a stable release and compatibility-floor decision ([tracking issue #58](https://github.com/ekinnee/omniroute-openclaw/issues/58)) |
 | `POST /v1/images/generations` | Image generation provider | ✅ Initial support |
 | `GET /api/usage/om-usage` | Provider usage snapshot (`usageProviders`) | ✅ Initial support when API-key usage visibility is enabled |
 | `POST /v1/images/edits` | Image generation/edit provider | 🔜 Next (part of ImageGenerationProvider edit capability) |
@@ -49,7 +50,6 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 | `POST /v1/messages` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
 | `POST /v1/rerank` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
 | `POST /v1/moderations` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
-| `/v1/files`, `/v1/batches` | No OpenClaw plugin surface — needs SDK PR | ⏳ Needs upstream PR |
 | `/v1/providers/{provider}/...` | Provider-specific routing | Consider after live catalog |
 
 ## Implementation Order
@@ -61,24 +61,26 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 3. Project reasoning controls only from returned capability metadata. Normalize supported effort tiers conservatively; map an explicit off selection to `reasoning_effort: "none"`; do not infer temperature support or arbitrary provider-specific flags.
 4. Add authenticated modality-specific catalog rows through `registerModelCatalogProvider`, beginning with image/video/music and adding audio when the model metadata supports reliable classification. Preserve model IDs and provider-reported capability data; do not create fallback media models.
 5. Keep embedding model handling explicit: filter `GET /v1/models` to embedding-capable rows, preserve ids exactly, include dimensionality in runtime/cache identity when OpenClaw provides it, and fail clearly when no embedding model is configured.
-6. Keep image generation explicit and generation-only for the first cut: filter `GET /v1/models` to image-capable rows, preserve ids exactly, pass size/count through to `/v1/images/generations`, and reject reference images until edits are implemented.
-7. Add image edits: extend the existing `ImageGenerationProvider` to support the `edit` capability, mapping to OmniRoute's `/v1/images/edits`.
-8. ~~Add web search support~~ ✅ Done: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
-9. Add batch transcription (STT): register via `registerMediaUnderstandingProvider`, mapping to OmniRoute's multipart `POST /v1/audio/transcriptions`. Do not label or implement it as realtime transcription without a supported streaming endpoint.
-10. Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.
-11. Add web fetch: register via `registerWebFetchProvider`, mapping to OmniRoute's `POST /v1/web/fetch`.
-12. ~~Add video generation~~ ✅ Done: register via `registerVideoGenerationProvider`, mapping to OmniRoute's `POST /v1/videos/generations`.
-13. Add music generation: register via `registerMusicGenerationProvider`, mapping to OmniRoute's `POST /v1/music/generations`.
+6. After the public async embedding-batch contract ships in a stable OpenClaw release, add provider-owned `runtime.batchEmbed` handling for OmniRoute's `/v1/files` and `/v1/batches`. Preserve input order, honor host polling and timeout controls, and return `null` only when the host should use its existing inline fallback. Treat this as embedding-specific support, not a generic file/batch API.
+7. Keep image generation explicit and generation-only for the first cut: filter `GET /v1/models` to image-capable rows, preserve ids exactly, pass size/count through to `/v1/images/generations`, and reject reference images until edits are implemented.
+8. Add image edits: extend the existing `ImageGenerationProvider` to support the `edit` capability, mapping to OmniRoute's `/v1/images/edits`.
+9. ~~Add web search support~~ ✅ Done: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
+10. Add batch transcription (STT): register via `registerMediaUnderstandingProvider`, mapping to OmniRoute's multipart `POST /v1/audio/transcriptions`. Do not label or implement it as realtime transcription without a supported streaming endpoint.
+11. Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.
+12. Add web fetch: register via `registerWebFetchProvider`, mapping to OmniRoute's `POST /v1/web/fetch`.
+13. ~~Add video generation~~ ✅ Done: register via `registerVideoGenerationProvider`, mapping to OmniRoute's `POST /v1/videos/generations`.
+14. Add music generation: register via `registerMusicGenerationProvider`, mapping to OmniRoute's `POST /v1/music/generations`.
 
 ### Upstream OpenClaw PRs needed (no plugin surface yet)
 
 1. Propose `registerRerankProvider` SDK surface for `/v1/rerank`.
 2. Propose `registerModerationProvider` SDK surface for `/v1/moderations`.
-3. Propose file/batch provider surfaces for `/v1/files` and `/v1/batches`.
+3. Propose generic file/batch provider surfaces for non-embedding uses of `/v1/files` and `/v1/batches`; asynchronous embedding batches are covered by the merged embedding runtime contract.
 4. Propose Responses API, completions, and messages provider surfaces for `/v1/responses`, `/v1/completions`, `/v1/messages`.
 
 ## Compatibility Notes
 
+- The asynchronous embedding-batch contract is present on OpenClaw `main` after 2026.9.4 and is not part of the current stable compatibility matrix. Do not import it or raise the plugin's OpenClaw floor until the first containing stable release is identified and packed-artifact compatibility is proven.
 - Plugin-owned guarded requests reject target `request.tls` overrides combined with `request.proxy.mode: "explicit-proxy"`, rather than silently dropping them. The guarded explicit-proxy policy in both OpenClaw 2026.7.1 and 2026.9.3 lacks an independent target TLS field; full support needs a public SDK contract. Direct and environment-proxy target TLS behavior is unchanged. This limitation applies to discovery, catalog audit, embeddings, image/video generation, and web search, not the separately owned chat or usage transports.
 - OmniRoute accepts standard bearer API keys and also URL token compatibility modes, but this plugin should prefer bearer auth through OpenClaw's provider credential handling.
 - `auto` is not special to this plugin. It is available only when the authenticated OmniRoute catalog advertises it, just like every other model or combo.
