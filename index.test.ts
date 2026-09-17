@@ -2024,7 +2024,7 @@ describe("omniroute provider plugin", () => {
     });
   });
 
-  it("generates OmniRoute images with an explicit model", async () => {
+  it("treats an empty OmniRoute image input list as generation", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
       new Response(JSON.stringify({
         data: [{ b64_json: Buffer.from("generated image").toString("base64") }],
@@ -2044,6 +2044,7 @@ describe("omniroute provider plugin", () => {
       prompt: "a schematic city",
       count: 9,
       size: "1536x1024",
+      inputImages: [],
       cfg: {
         models: {
           providers: {
@@ -2059,7 +2060,14 @@ describe("omniroute provider plugin", () => {
     });
 
     expect(provider.defaultModel).toBeUndefined();
-    expect(provider.capabilities.edit.enabled).toBe(false);
+    expect(provider.capabilities.edit).toEqual({
+      enabled: true,
+      maxCount: 1,
+      maxInputImages: 1,
+      supportsSize: true,
+      supportsAspectRatio: false,
+      supportsResolution: false,
+    });
     expect(fetchMock).toHaveBeenCalledWith(
       "http://localhost:20128/v1/images/generations",
       expect.objectContaining({ method: "POST" }),
@@ -2240,21 +2248,158 @@ describe("omniroute provider plugin", () => {
     ).rejects.toThrow(/explicit image model/);
   });
 
-  it("rejects OmniRoute image reference inputs until edits are supported", async () => {
+  it("edits one OmniRoute image through the JSON data URL contract", async () => {
+    const input = Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=",
+      "base64",
+    );
+    const output = Buffer.from(input);
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({
+        data: [{ b64_json: output.toString("base64"), mime_type: "image/png" }],
+      }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
     const { buildOmniRouteImageGenerationProvider } = await import(
       "./image-generation-provider.js"
     );
     const provider = buildOmniRouteImageGenerationProvider();
 
+    const result = await provider.generateImage({
+      provider: "omniroute",
+      model: "openai/gpt-image-2",
+      prompt: "edit this",
+      count: 4,
+      size: "1536x1024",
+      inputImages: [{ buffer: input, mimeType: "image/png", fileName: "reference.png" }],
+      cfg: {
+        models: {
+          providers: {
+            omniroute: {
+              apiKey: "secret-key",
+              baseUrl: "http://localhost:20128/v1/",
+              request: { allowPrivateNetwork: true },
+            },
+          },
+        },
+      } as never,
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "http://localhost:20128/v1/images/edits",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const requestInit = fetchMock.mock.calls[0]?.[1] as RequestInit;
+    expect(JSON.parse(String(requestInit.body))).toEqual({
+      model: "openai/gpt-image-2",
+      prompt: "edit this",
+      image: `data:image/png;base64,${input.toString("base64")}`,
+      size: "1536x1024",
+      response_format: "b64_json",
+    });
+    expect(result).toEqual({
+      model: "openai/gpt-image-2",
+      images: [{
+        buffer: output,
+        mimeType: "image/png",
+        fileName: "omniroute-image-1.png",
+      }],
+    });
+  });
+
+  it.each([
+    {
+      name: "multiple reference images",
+      inputImages: [
+        { buffer: Buffer.from("one"), mimeType: "image/png" },
+        { buffer: Buffer.from("two"), mimeType: "image/png" },
+      ],
+      error: /exactly one reference image/,
+    },
+    {
+      name: "an empty reference image",
+      inputImages: [{ buffer: Buffer.alloc(0), mimeType: "image/png" }],
+      error: /non-empty reference image/,
+    },
+    {
+      name: "a non-image reference MIME type",
+      inputImages: [{ buffer: Buffer.from("not an image"), mimeType: "text/plain" }],
+      error: /image\/\* reference MIME type/,
+    },
+  ])("rejects $name before authentication or network access", async ({ inputImages, error }) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch");
+    const { buildOmniRouteImageGenerationProvider } = await import(
+      "./image-generation-provider.js"
+    );
+
     await expect(
-      provider.generateImage({
+      buildOmniRouteImageGenerationProvider().generateImage({
+        provider: "omniroute",
+        model: "openai/gpt-image-2",
+        prompt: "edit this",
+        inputImages,
+        cfg: {} as never,
+      }),
+    ).rejects.toThrow(error);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("labels OmniRoute image edit HTTP failures", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response("unsupported edit", { status: 400 }),
+    );
+    const { buildOmniRouteImageGenerationProvider } = await import(
+      "./image-generation-provider.js"
+    );
+
+    await expect(
+      buildOmniRouteImageGenerationProvider().generateImage({
         provider: "omniroute",
         model: "openai/gpt-image-2",
         prompt: "edit this",
         inputImages: [{ buffer: Buffer.from("image"), mimeType: "image/png" }],
-        cfg: {} as never,
+        cfg: {
+          models: {
+            providers: {
+              omniroute: { apiKey: "secret-key" },
+            },
+          },
+        } as never,
       }),
-    ).rejects.toThrow(/reference images are not supported yet/);
+    ).rejects.toThrow(/OmniRoute image edit failed/);
+  });
+
+  it.each([
+    { name: "malformed", payload: {}, error: /image edit response malformed/ },
+    { name: "empty", payload: { data: [] }, error: /image edit response missing image data/ },
+  ])("reports edit-specific errors for $name OmniRoute responses", async ({ payload, error }) => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify(payload), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    const { buildOmniRouteImageGenerationProvider } = await import(
+      "./image-generation-provider.js"
+    );
+
+    await expect(
+      buildOmniRouteImageGenerationProvider().generateImage({
+        provider: "omniroute",
+        model: "openai/gpt-image-2",
+        prompt: "edit this",
+        inputImages: [{ buffer: Buffer.from("image"), mimeType: "image/png" }],
+        cfg: {
+          models: {
+            providers: {
+              omniroute: { apiKey: "secret-key" },
+            },
+          },
+        } as never,
+      }),
+    ).rejects.toThrow(error);
   });
 
   it("fails clearly on empty OmniRoute image responses", async () => {

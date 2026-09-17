@@ -22,6 +22,7 @@ type ImageGenerationProvider = Parameters<OpenClawPluginApi["registerImageGenera
 type ImageGenerationRequest = Parameters<ImageGenerationProvider["generateImage"]>[0];
 type ImageGenerationResult = Awaited<ReturnType<ImageGenerationProvider["generateImage"]>>;
 type GeneratedImageAsset = ImageGenerationResult["images"][number];
+type ImageOperation = "generation" | "edit";
 
 const DEFAULT_IMAGE_SIZE = "1024x1024";
 const MAX_IMAGE_COUNT = 4;
@@ -47,6 +48,22 @@ function resolveConfiguredBaseUrl(req: ImageGenerationRequest): string {
   return resolveOmniRouteBaseUrl({ config: req.cfg });
 }
 
+function requireEditInput(
+  inputImages: NonNullable<ImageGenerationRequest["inputImages"]>,
+): NonNullable<ImageGenerationRequest["inputImages"]>[number] {
+  if (inputImages.length !== 1) {
+    throw new Error("OmniRoute image edits require exactly one reference image.");
+  }
+  const [image] = inputImages;
+  if (!image || image.buffer.length === 0) {
+    throw new Error("OmniRoute image edits require a non-empty reference image.");
+  }
+  if (!image.mimeType.toLowerCase().startsWith("image/")) {
+    throw new Error("OmniRoute image edits require an image/* reference MIME type.");
+  }
+  return image;
+}
+
 function sniffMimeType(buffer: Buffer): { mimeType: string; extension: string } {
   if (buffer.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))) {
     return { mimeType: "image/png", extension: "png" };
@@ -66,21 +83,21 @@ function sniffMimeType(buffer: Buffer): { mimeType: string; extension: string } 
   return { mimeType: "image/png", extension: "png" };
 }
 
-function parseImageResponse(payload: unknown): GeneratedImageAsset[] {
+function parseImageResponse(payload: unknown, operation: ImageOperation): GeneratedImageAsset[] {
   if (!payload || typeof payload !== "object" || !Array.isArray((payload as { data?: unknown }).data)) {
-    throw new Error("OmniRoute image generation response malformed");
+    throw new Error(`OmniRoute image ${operation} response malformed`);
   }
   return (payload as { data: unknown[] }).data.map((entry, index) => {
     if (!entry || typeof entry !== "object") {
-      throw new Error("OmniRoute image generation response malformed");
+      throw new Error(`OmniRoute image ${operation} response malformed`);
     }
     const item = entry as { b64_json?: unknown; mime_type?: unknown; revised_prompt?: unknown };
     if (typeof item.b64_json !== "string" || !item.b64_json.trim()) {
-      throw new Error("OmniRoute image generation response missing image data");
+      throw new Error(`OmniRoute image ${operation} response missing image data`);
     }
     const buffer = Buffer.from(item.b64_json, "base64");
     if (buffer.length === 0) {
-      throw new Error("OmniRoute image generation response missing image data");
+      throw new Error(`OmniRoute image ${operation} response missing image data`);
     }
     const detected = sniffMimeType(buffer);
     const mimeType = typeof item.mime_type === "string" && item.mime_type.trim()
@@ -111,18 +128,16 @@ export function buildOmniRouteImageGenerationProvider(): ImageGenerationProvider
         supportsResolution: false,
       },
       edit: {
-        enabled: false,
+        enabled: true,
         maxCount: 1,
-        maxInputImages: 0,
-        supportsSize: false,
+        maxInputImages: 1,
+        supportsSize: true,
         supportsAspectRatio: false,
         supportsResolution: false,
       },
     },
     async generateImage(req) {
-      if ((req.inputImages?.length ?? 0) > 0) {
-        throw new Error("OmniRoute image edits and reference images are not supported yet.");
-      }
+      const editInput = req.inputImages?.length ? requireEditInput(req.inputImages) : undefined;
       const model = requireImageModel(req.model);
       const apiKey = await resolveOmniRouteApiKey({
         cfg: req.cfg,
@@ -149,31 +164,42 @@ export function buildOmniRouteImageGenerationProvider(): ImageGenerationProvider
         headers.set("Content-Type", "application/json");
       }
 
+      const requestBody = editInput
+        ? {
+            model,
+            prompt: req.prompt,
+            image: `data:${editInput.mimeType};base64,${editInput.buffer.toString("base64")}`,
+            ...(req.size ? { size: req.size } : {}),
+            response_format: "b64_json",
+          }
+        : {
+            model,
+            prompt: req.prompt,
+            n: resolveImageCount(req.count),
+            size: req.size ?? DEFAULT_IMAGE_SIZE,
+            response_format: "b64_json",
+          };
+      const operation: ImageOperation = editInput ? "edit" : "generation";
       const request = await postOmniRouteJson({
-        url: `${http.baseUrl}/images/generations`,
+        url: `${http.baseUrl}/images/${editInput ? "edits" : "generations"}`,
         headers,
-        body: {
-          model,
-          prompt: req.prompt,
-          n: resolveImageCount(req.count),
-          size: req.size ?? DEFAULT_IMAGE_SIZE,
-          response_format: "b64_json",
-        },
+        body: requestBody,
         timeoutMs: req.timeoutMs,
         ssrfPolicy: http.ssrfPolicy,
         dispatcherPolicy: http.dispatcherPolicy,
       });
       try {
-        await assertOmniRouteOk(request.response, "OmniRoute image generation failed");
+        await assertOmniRouteOk(request.response, `OmniRoute image ${operation} failed`);
         const images = parseImageResponse(
           await readOmniRouteJson(
             request.response,
-            "omniroute.image-generation",
+            `omniroute.image-${operation}`,
             OMNIROUTE_JSON_READ_OPTIONS.imageGeneration,
           ),
+          operation,
         );
         if (images.length === 0) {
-          throw new Error("OmniRoute image generation response missing image data");
+          throw new Error(`OmniRoute image ${operation} response missing image data`);
         }
         return { images, model };
       } finally {
