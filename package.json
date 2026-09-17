@@ -3,6 +3,17 @@
   "version": "2.2.0",
   "private": false,
   "description": "OpenClaw OmniRoute provider plugin",
+  "keywords": [
+    "omniroute",
+    "model-routing",
+    "multi-provider",
+    "openai-compatible",
+    "inference",
+    "embeddings",
+    "image-generation",
+    "video-generation",
+    "web-search"
+  ],
   "type": "module",
   "packageManager": "pnpm@9.15.4",
   "bin": {

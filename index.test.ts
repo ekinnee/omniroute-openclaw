@@ -85,6 +85,17 @@ describe("omniroute provider plugin", () => {
     expect(pkg.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(pkg.openclaw.extensions).toContain("./dist/index.js");
     expect(pkg.bin["omniroute-catalog-audit"]).toBe("./dist/catalog-audit-bin.js");
+    expect(pkg.keywords).toEqual([
+      "omniroute",
+      "model-routing",
+      "multi-provider",
+      "openai-compatible",
+      "inference",
+      "embeddings",
+      "image-generation",
+      "video-generation",
+      "web-search",
+    ]);
     expect(pkg.openclaw.compat.pluginApi).toBeDefined();
     expect(pkg.openclaw.build.openclawVersion).toBeDefined();
   });
@@ -148,6 +159,8 @@ describe("omniroute provider plugin", () => {
       readFileSync(resolve(__dirname, "openclaw.plugin.json"), "utf8"),
     );
     expect(manifest.id).toBe("omniroute");
+    expect(manifest).not.toHaveProperty("tags");
+    expect(manifest.categories).toEqual(["models", "media", "web"]);
     expect(manifest.providers).toContain("omniroute");
     expect(manifest.contracts.embeddingProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.imageGenerationProviders).toEqual(["omniroute"]);
