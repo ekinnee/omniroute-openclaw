@@ -23,6 +23,7 @@
     "dist",
     "openclaw.plugin.json",
     "README.md",
+    "CHANGELOG.md",
     "OMNIROUTE_SUPPORT.md",
     "LICENSE"
   ],
