@@ -70,6 +70,7 @@ function assertPluginManifest(packageRoot) {
     "imageGenerationProviders",
     "usageProviders",
     "speechProviders",
+    "mediaUnderstandingProviders",
     "videoGenerationProviders",
     "musicGenerationProviders",
     "webFetchProviders",
@@ -157,6 +158,7 @@ async function runInstalledArtifact() {
     embedding: 0,
     image: 0,
     speech: 0,
+    mediaUnderstanding: 0,
     video: 0,
     music: 0,
     webFetch: 0,
@@ -168,6 +170,7 @@ async function runInstalledArtifact() {
     embedding: [],
     image: [],
     speech: [],
+    mediaUnderstanding: [],
     video: [],
     music: [],
     webFetch: [],
@@ -194,6 +197,10 @@ async function runInstalledArtifact() {
     registerSpeechProvider: (provider) => {
       registered.speech++;
       registrations.speech.push(provider);
+    },
+    registerMediaUnderstandingProvider: (provider) => {
+      registered.mediaUnderstanding++;
+      registrations.mediaUnderstanding.push(provider);
     },
     registerVideoGenerationProvider: (provider) => {
       registered.video++;

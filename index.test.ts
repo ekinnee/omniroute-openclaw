@@ -18,6 +18,7 @@ const REQUIRED_OPENCLAW_SDK_EXPORTS = [
   "./plugin-sdk/provider-usage",
   "./plugin-sdk/music-generation",
   "./plugin-sdk/provider-web-fetch",
+  "./plugin-sdk/media-understanding",
 ] as const;
 
 function mockCatalogResponse(payload: unknown, status = 200): Response {
@@ -57,6 +58,7 @@ describe("omniroute plugin entry and integration", () => {
       "music-generation",
       "speech",
       "web-fetch",
+      "audio-transcription",
       "web-search",
     ]);
     expect(pkg.openclaw.compat.pluginApi).toBeDefined();
@@ -95,6 +97,7 @@ describe("omniroute plugin entry and integration", () => {
       "music-generation-provider.ts",
       "speech-provider.ts",
       "web-fetch-provider.ts",
+      "audio-transcription-provider.ts",
       "web-search-provider.ts",
       "auth.ts",
       "http.ts",
@@ -134,6 +137,7 @@ describe("omniroute plugin entry and integration", () => {
     expect(manifest.contracts.musicGenerationProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.speechProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.webFetchProviders).toEqual(["omniroute"]);
+    expect(manifest.contracts.mediaUnderstandingProviders).toEqual(["omniroute"]);
     expect(manifest.modelCatalog.providers).toBeUndefined();
     expect(manifest.modelCatalog.discovery).toEqual({ omniroute: "runtime" });
   });
@@ -238,6 +242,7 @@ describe("omniroute plugin entry and integration", () => {
     const registerVideoGenerationProvider = vi.fn();
     const registerMusicGenerationProvider = vi.fn();
     const registerSpeechProvider = vi.fn();
+    const registerMediaUnderstandingProvider = vi.fn();
 
     plugin.default.register({
       registerProvider,
@@ -249,6 +254,7 @@ describe("omniroute plugin entry and integration", () => {
       registerVideoGenerationProvider,
       registerMusicGenerationProvider,
       registerSpeechProvider,
+      registerMediaUnderstandingProvider,
     } as never);
 
     expect(registerProvider).toHaveBeenCalledWith(
@@ -332,6 +338,13 @@ describe("omniroute plugin entry and integration", () => {
         id: "omniroute",
         label: "OmniRoute",
         createTool: expect.any(Function),
+      }),
+    );
+    expect(registerMediaUnderstandingProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "omniroute",
+        capabilities: ["audio"],
+        transcribeAudio: expect.any(Function),
       }),
     );
   });
