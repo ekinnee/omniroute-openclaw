@@ -103,13 +103,9 @@ export function buildOmniRouteVideoGenerationProvider() {
                     Authorization: `Bearer ${apiKey}`,
                 },
             });
-            const headers = new Headers(http.headers);
-            if (!headers.has("Content-Type")) {
-                headers.set("Content-Type", "application/json");
-            }
             const request = await postOmniRouteJson({
                 url: `${http.baseUrl}/videos/generations`,
-                headers,
+                headers: http.headers,
                 body: {
                     model,
                     prompt: req.prompt,

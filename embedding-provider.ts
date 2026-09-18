@@ -167,10 +167,6 @@ async function requestEmbeddings(
     }
     headers.set(key, value);
   }
-  if (!headers.has("Content-Type")) {
-    headers.set("Content-Type", "application/json");
-  }
-
   const body: Record<string, unknown> = {
     model: requireEmbeddingModel(options.model),
     input: inputs.map(normalizeEmbeddingInput),

@@ -185,11 +185,15 @@ export async function postOmniRouteJson(params: {
   ssrfPolicy?: SsrFPolicy;
   dispatcherPolicy?: DispatcherPolicy;
 }): Promise<{ response: Response; release: () => Promise<void> }> {
+  const headers = new Headers(params.headers);
+  if (!headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   const { response, release } = await fetchWithSsrFGuard({
     url: params.url,
     init: {
       method: "POST",
-      headers: params.headers,
+      headers,
       body: JSON.stringify(params.body),
     },
     timeoutMs: params.timeoutMs,

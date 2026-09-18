@@ -170,10 +170,6 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
               Authorization: `Bearer ${apiKey}`,
             },
           });
-          const headers = new Headers(http.headers);
-          if (!headers.has("Content-Type")) {
-            headers.set("Content-Type", "application/json");
-          }
           const body: Record<string, unknown> = {
             model: "auto",
             query,
@@ -194,7 +190,7 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
 
           const request = await postOmniRouteJson({
             url: `${http.baseUrl}/search`,
-            headers,
+            headers: http.headers,
             body,
             timeoutMs: 30_000,
             signal: executionContext?.signal,
