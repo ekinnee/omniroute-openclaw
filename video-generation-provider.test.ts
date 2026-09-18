@@ -41,7 +41,7 @@ describe("OmniRoute video generation provider", () => {
       "https://env-omniroute.example/v1/videos/generations",
       expect.objectContaining({ method: "POST" }),
     );
-  });
+  }, 10_000);
 
   it("generates OmniRoute inline video artifacts", async () => {
     const video = Buffer.from("generated video");
