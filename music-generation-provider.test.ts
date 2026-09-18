@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 const baseRequest = {
   provider: "omniroute",
@@ -18,6 +18,10 @@ const baseRequest = {
 };
 
 describe("OmniRoute music generation provider", () => {
+  beforeAll(async () => {
+    await import("./music-generation-provider.js");
+  }, 30_000);
+
   afterEach(() => {
     vi.restoreAllMocks();
     vi.unstubAllEnvs();
