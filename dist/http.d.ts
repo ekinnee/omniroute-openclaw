@@ -71,13 +71,28 @@ export declare const OMNIROUTE_JSON_READ_OPTIONS: {
         readonly maxBytes: number;
         readonly chunkTimeoutMs: 30000;
     };
+    readonly musicGeneration: {
+        readonly maxBytes: number;
+        readonly chunkTimeoutMs: 30000;
+    };
     readonly webSearch: {
         readonly maxBytes: number;
         readonly chunkTimeoutMs: 30000;
     };
 };
+export declare function readOmniRouteBytes(response: Response, operation: string, options?: OmniRouteJsonReadOptions): Promise<Uint8Array>;
 export declare function readOmniRouteText(response: Response, operation: string, options?: OmniRouteJsonReadOptions): Promise<string>;
 export declare function readOmniRouteJson(response: Response, operation: string, options?: OmniRouteJsonReadOptions): Promise<unknown>;
 export declare function assertOmniRouteOk(response: Response, operation: string): Promise<void>;
+export declare function downloadOmniRouteMusicAsset(params: {
+    url: string;
+    timeoutMs?: number;
+    mimeType?: string;
+    maxBytes?: number;
+    chunkTimeoutMs?: number;
+}): Promise<{
+    buffer: Buffer;
+    mimeType: string;
+}>;
 export {};
 //# sourceMappingURL=http.d.ts.map

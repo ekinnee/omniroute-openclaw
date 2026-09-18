@@ -12,6 +12,7 @@
     "embeddings",
     "image-generation",
     "video-generation",
+    "music-generation",
     "web-search"
   ],
   "type": "module",
