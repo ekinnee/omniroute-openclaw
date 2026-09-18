@@ -8,4 +8,6 @@ export declare function normalizeCatalogType(value: unknown): string;
 export declare function isCatalogChatEntry(entry: OmniRouteCatalogEntry): boolean;
 export declare function isCatalogEmbeddingEntry(entry: OmniRouteCatalogEntry): boolean;
 export declare function isCatalogImageEntry(entry: OmniRouteCatalogEntry): boolean;
+export declare function isCatalogVideoEntry(entry: OmniRouteCatalogEntry): boolean;
+export declare function isCatalogMusicEntry(entry: OmniRouteCatalogEntry): boolean;
 //# sourceMappingURL=catalog-vocabulary.d.ts.map

@@ -144,14 +144,15 @@ The web search tool supports `query`, `count` (1-10), `freshness` (day/week/mont
 ## How It Works
 
 1. **Authenticated live model discovery** — The plugin fetches `GET /v1/models` from your OmniRoute gateway and registers its chat-capable rows as `omniroute/<model-id>`. That response is authoritative: model and combo IDs are preserved exactly, and the available list varies with the gateway's upstream-provider configuration and the authenticated API key.
-2. **No synthetic default** — The plugin does not hardcode `auto`, any other combo, or a fallback model. A model is shown only when OmniRoute advertises it; discovery failure does not fabricate a model selection. Chat rows missing a positive context or output limit are excluded from discovery until OmniRoute advertises both; the catalog audit still shows those rows and their missing metadata.
-3. **Catalog diagnostics** — The packaged `omniroute-catalog-audit` command shows the authenticated gateway's advertised metadata without filling gaps with plugin guesses. Discovery excludes rows with missing or invalid sizing; missing thinking tiers do not create controls.
-4. **Reasoning controls from metadata** — A thinking selector is exposed only when the returned row advertises explicit `effort_tiers`. `supportsThinking` without those tiers still marks the model as reasoning-capable, but it does not invent `none`/`low`/`medium`/`high`/`xhigh` controls. OpenClaw's off state is sent as `reasoning_effort: "none"`; supported non-off levels are passed through using the returned effort metadata. OpenClaw continues to own the configured/session default when no level is explicitly selected—the plugin does not invent another default.
-5. **OpenAI-compatible transport** — Text requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
-6. **Configured embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint and require a configured embedding model.
-7. **Configured image generation and editing** — Image generation uses `POST /v1/images/generations`. Edits send one reference image as a JSON data URL to `POST /v1/images/edits`. Both require a configured OmniRoute model that supports the requested operation.
-8. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
-9. **Provider quota usage** — OpenClaw status and usage views can read OmniRoute's credential-scoped cached quota snapshot from `GET /api/usage/om-usage`. Enable usage visibility for that OmniRoute API key; a key without that permission reports an explicit unavailable status and never exposes other gateway connections.
+2. **Authenticated media catalogs** — The same credential-scoped response publishes image, video, and music rows through OpenClaw's modality-specific pickers. Model IDs and advertised capability objects are preserved; classification uses explicit type, endpoint, and output-modality metadata. Audio/voice rows remain deferred until a reliable OpenClaw audio contract is available.
+3. **No synthetic default** — The plugin does not hardcode `auto`, any other combo, or a fallback model. A model is shown only when OmniRoute advertises it; discovery failure does not fabricate a model selection. Chat rows missing a positive context or output limit are excluded from discovery until OmniRoute advertises both; the catalog audit still shows those rows and their missing metadata.
+4. **Catalog diagnostics** — The packaged `omniroute-catalog-audit` command shows the authenticated gateway's advertised metadata without filling gaps with plugin guesses. Discovery excludes rows with missing or invalid sizing; missing thinking tiers do not create controls.
+5. **Reasoning controls from metadata** — A thinking selector is exposed only when the returned row advertises explicit `effort_tiers`. `supportsThinking` without those tiers still marks the model as reasoning-capable, but it does not invent `none`/`low`/`medium`/`high`/`xhigh` controls. OpenClaw's off state is sent as `reasoning_effort: "none"`; supported non-off levels are passed through using the returned effort metadata. OpenClaw continues to own the configured/session default when no level is explicitly selected—the plugin does not invent another default.
+6. **OpenAI-compatible transport** — Text requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
+7. **Configured embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint and require a configured embedding model.
+8. **Configured image generation and editing** — Image generation uses `POST /v1/images/generations`. Edits send one reference image as a JSON data URL to `POST /v1/images/edits`. Both require a configured OmniRoute model that supports the requested operation.
+9. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
+10. **Provider quota usage** — OpenClaw status and usage views can read OmniRoute's credential-scoped cached quota snapshot from `GET /api/usage/om-usage`. Enable usage visibility for that OmniRoute API key; a key without that permission reports an explicit unavailable status and never exposes other gateway connections.
 
 Temperature suppression and arbitrary provider-specific request flags are not inferred from catalog rows. They require future transport-level support and validation.
 
@@ -168,7 +169,7 @@ capabilities mature.
 |---|---|
 | Chat completions (`/v1/chat/completions`) | ✅ Initial support |
 | Live model catalog (`GET /v1/models`) | ✅ Initial support |
-| Modality-specific model catalogs (`GET /v1/models`) | 🔜 Planned — publish authenticated image, video, music, and audio rows for OpenClaw pickers |
+| Modality-specific model catalogs (`GET /v1/models`) | ✅ Initial support — publish authenticated image, video, and music rows; audio remains deferred pending reliable metadata and an owning OpenClaw provider contract |
 | Embeddings (`/v1/embeddings`) | ✅ Initial support |
 | Async embedding batches (`/v1/files` + `/v1/batches`) | ⏳ OpenClaw contract merged in [#129625](https://github.com/openclaw/openclaw/pull/129625); implement after it ships in a stable release ([tracking issue #58](https://github.com/ekinnee/omniroute-openclaw/issues/58)) |
 | Image generation (`/v1/images/generations`) | ✅ Initial support |

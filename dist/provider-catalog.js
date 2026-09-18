@@ -1,9 +1,9 @@
 import { createHash } from "node:crypto";
-import { OMNIROUTE_DEFAULT_BASE_URL, } from "./models.js";
+import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
 import { redactOmniRouteBaseUrl, resolveOmniRouteBaseUrl } from "./base-url.js";
 import { assertOmniRouteOk, getOmniRouteJson, OMNIROUTE_JSON_READ_OPTIONS, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
-import { isCatalogChatEntry, isCatalogEmbeddingEntry, isCatalogImageEntry, normalizeCatalogStringArray, } from "./catalog-vocabulary.js";
+import { isCatalogChatEntry, isCatalogEmbeddingEntry, isCatalogImageEntry, isCatalogMusicEntry, isCatalogVideoEntry, normalizeCatalogStringArray, } from "./catalog-vocabulary.js";
 const liveCatalogCache = new Map();
 const LIVE_CATALOG_TTL_MS = 30_000;
 const LIVE_CATALOG_TIMEOUT_MS = 5_000;
@@ -214,16 +214,11 @@ export function buildOmniRouteImageModelFromCatalogEntry(entry) {
         inputModalities: normalizeTrimmedStringArray(entry.input_modalities),
     };
 }
-function buildOmniRouteModels(payload, builder) {
-    if (!Array.isArray(payload.data)) {
-        throw new Error("OmniRoute model catalog response did not include a data array");
-    }
+function buildOmniRouteModelsFromEntries(entries, builder) {
     const seen = new Set();
     const models = [];
-    for (const rawEntry of payload.data) {
-        if (!isRecord(rawEntry))
-            continue;
-        const model = builder(rawEntry);
+    for (const entry of entries) {
+        const model = builder(entry);
         if (!model || seen.has(model.id))
             continue;
         seen.add(model.id);
@@ -231,23 +226,74 @@ function buildOmniRouteModels(payload, builder) {
     }
     return models;
 }
-async function fetchOmniRouteModels(params, builder, errorLabel) {
+function readOmniRouteModelEntries(payload) {
+    if (!Array.isArray(payload.data)) {
+        throw new Error("OmniRoute model catalog response did not include a data array");
+    }
+    return payload.data.filter(isRecord);
+}
+function buildOmniRouteMediaCatalogEntry(entry, kind) {
+    const id = typeof entry.id === "string" ? entry.id.trim() : "";
+    if (!id) {
+        return null;
+    }
+    const matches = (kind === "image_generation" && isCatalogImageEntry(entry)) ||
+        (kind === "video_generation" && isCatalogVideoEntry(entry)) ||
+        (kind === "music_generation" && isCatalogMusicEntry(entry));
+    if (!matches) {
+        return null;
+    }
+    const label = (typeof entry.name === "string" && entry.name.trim()) ||
+        (typeof entry.root === "string" && entry.root.trim());
+    return {
+        kind,
+        provider: OMNIROUTE_PROVIDER_ID,
+        model: id,
+        ...(label ? { label } : {}),
+        source: "live",
+        ...(entry.media_capabilities !== undefined
+            ? { capabilities: entry.media_capabilities }
+            : entry.capabilities !== undefined
+                ? { capabilities: entry.capabilities }
+                : {}),
+    };
+}
+function projectOmniRouteMediaCatalog(entries, kinds) {
+    const seen = new Set();
+    const rows = [];
+    for (const kind of kinds) {
+        for (const entry of entries) {
+            const row = buildOmniRouteMediaCatalogEntry(entry, kind);
+            const key = `${kind}:${row?.model ?? ""}`;
+            if (!row || seen.has(key)) {
+                continue;
+            }
+            seen.add(key);
+            rows.push(row);
+        }
+    }
+    return rows;
+}
+async function fetchOmniRouteModelEntries(params, errorLabel) {
     const http = params.http ?? resolveOmniRouteCatalogHttpRequest(params);
     const { response, release } = await getOmniRouteJson({
         url: `${http.baseUrl}/models`,
         headers: http.headers,
         signal: params.signal,
-        timeoutMs: LIVE_CATALOG_TIMEOUT_MS,
+        timeoutMs: params.timeoutMs ?? LIVE_CATALOG_TIMEOUT_MS,
         ssrfPolicy: http.ssrfPolicy,
         dispatcherPolicy: http.dispatcherPolicy,
     });
     try {
         await assertOmniRouteOk(response, `OmniRoute ${errorLabel} model catalog`);
-        return buildOmniRouteModels((await readOmniRouteJson(response, `OmniRoute ${errorLabel} model catalog`, OMNIROUTE_JSON_READ_OPTIONS.catalog)), builder);
+        return readOmniRouteModelEntries((await readOmniRouteJson(response, `OmniRoute ${errorLabel} model catalog`, OMNIROUTE_JSON_READ_OPTIONS.catalog)));
     }
     finally {
         await release();
     }
+}
+async function fetchOmniRouteModels(params, builder, errorLabel) {
+    return buildOmniRouteModelsFromEntries(await fetchOmniRouteModelEntries(params, errorLabel), builder);
 }
 export async function fetchOmniRouteChatModels(params) {
     return fetchOmniRouteModels(params, buildOmniRouteModelFromCatalogEntry, "chat");
@@ -285,59 +331,124 @@ export function resolveOmniRouteCatalogCredentials(params) {
         ? { runtimeApiKey: fallbackRuntimeApiKey, discoveryApiKey: fallbackDiscoveryApiKey }
         : null;
 }
-export async function buildLiveOmniRouteProvider(ctx) {
+function liveCatalogCacheKey(params) {
+    return JSON.stringify([
+        "omniroute",
+        params.baseUrl,
+        params.auth.mode,
+        params.auth.source,
+        params.auth.profileId ?? "none",
+        fingerprintCredential(params.discoveryApiKey),
+        fingerprintLiveCatalogRequest(params.http),
+    ]);
+}
+function shouldCacheLiveCatalogEntries(entries) {
+    return entries.some((entry) => Boolean(buildOmniRouteModelFromCatalogEntry(entry)) ||
+        Boolean(buildOmniRouteEmbeddingModelFromCatalogEntry(entry)) ||
+        projectOmniRouteMediaCatalog([entry], [
+            "image_generation",
+            "video_generation",
+            "music_generation",
+        ]).length > 0);
+}
+function awaitLiveCatalogValue(value, params) {
+    const timeoutMs = typeof params.timeoutMs === "number" && params.timeoutMs > 0 ? params.timeoutMs : undefined;
+    if (!params.signal && timeoutMs === undefined) {
+        return value;
+    }
+    return new Promise((resolve, reject) => {
+        let timer;
+        const cleanup = () => {
+            if (timer !== undefined) {
+                clearTimeout(timer);
+            }
+            params.signal?.removeEventListener("abort", onAbort);
+        };
+        const onAbort = () => {
+            cleanup();
+            reject(params.signal?.reason ?? new Error("OmniRoute live catalog request aborted"));
+        };
+        if (params.signal?.aborted) {
+            onAbort();
+            return;
+        }
+        params.signal?.addEventListener("abort", onAbort, { once: true });
+        if (timeoutMs !== undefined) {
+            timer = setTimeout(() => {
+                cleanup();
+                reject(new Error("OmniRoute live catalog request timed out"));
+            }, timeoutMs);
+        }
+        void value.then((resolved) => {
+            cleanup();
+            resolve(resolved);
+        }, (error) => {
+            cleanup();
+            reject(error);
+        });
+    });
+}
+async function resolveOmniRouteLiveCatalog(ctx) {
     const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config, env: ctx.env });
     const request = ctx.config.models?.providers?.omniroute?.request;
     const auth = ctx.resolveProviderAuth("omniroute");
-    try {
-        const credentialsOrPromise = resolveOmniRouteCatalogCredentials({
+    const credentialsOrPromise = resolveOmniRouteCatalogCredentials({
+        auth,
+        config: ctx.config,
+        agentDir: ctx.agentDir,
+        workspaceDir: ctx.workspaceDir,
+        resolveConfiguredApiKey: ctx.resolveProviderApiKey,
+    });
+    const credentials = credentialsOrPromise instanceof Promise
+        ? await credentialsOrPromise
+        : credentialsOrPromise;
+    if (!credentials) {
+        return null;
+    }
+    const http = resolveOmniRouteCatalogHttpRequest({
+        baseUrl,
+        apiKey: credentials.discoveryApiKey,
+        request,
+    });
+    const entries = await awaitLiveCatalogValue(getCachedLiveCatalogValue({
+        key: liveCatalogCacheKey({
+            baseUrl,
             auth,
-            config: ctx.config,
-            agentDir: ctx.agentDir,
-            workspaceDir: ctx.workspaceDir,
-            resolveConfiguredApiKey: ctx.resolveProviderApiKey,
-        });
-        const credentials = credentialsOrPromise instanceof Promise
-            ? await credentialsOrPromise
-            : credentialsOrPromise;
-        if (!credentials) {
+            discoveryApiKey: credentials.discoveryApiKey,
+            http,
+        }),
+        load: () => fetchOmniRouteModelEntries({
+            baseUrl,
+            apiKey: credentials.discoveryApiKey,
+            http,
+        }, "live"),
+        shouldCache: shouldCacheLiveCatalogEntries,
+    }), ctx);
+    return {
+        baseUrl,
+        runtimeApiKey: credentials.runtimeApiKey,
+        entries,
+    };
+}
+export async function buildLiveOmniRouteProvider(ctx) {
+    try {
+        const liveCatalog = await resolveOmniRouteLiveCatalog(ctx);
+        if (!liveCatalog) {
             return null;
         }
-        const { runtimeApiKey, discoveryApiKey } = credentials;
-        const http = resolveOmniRouteCatalogHttpRequest({
-            baseUrl,
-            apiKey: discoveryApiKey,
-            request,
-        });
-        const models = await getCachedLiveCatalogValue({
-            key: JSON.stringify([
-                "omniroute",
-                "chat-models",
-                baseUrl,
-                auth.mode,
-                auth.source,
-                auth.profileId ?? "none",
-                fingerprintCredential(discoveryApiKey),
-                fingerprintLiveCatalogRequest(http),
-            ]),
-            load: () => fetchOmniRouteModels({
-                baseUrl,
-                apiKey: discoveryApiKey,
-                http,
-            }, buildOmniRouteModelFromCatalogEntry, "chat"),
-            shouldCache: (resolved) => resolved.length > 0,
-        });
+        const models = buildOmniRouteModelsFromEntries(liveCatalog.entries, buildOmniRouteModelFromCatalogEntry);
         if (models.length === 0) {
             return null;
         }
         return {
-            baseUrl,
+            baseUrl: liveCatalog.baseUrl,
             api: "openai-completions",
-            apiKey: runtimeApiKey,
+            apiKey: liveCatalog.runtimeApiKey,
             models,
         };
     }
     catch (err) {
+        const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config, env: ctx.env });
         console.warn(`[omniroute] Live model discovery failed (${redactOmniRouteBaseUrl(baseUrl)}): ${redactLiveDiscoveryError(err)}`);
         return null;
     }
@@ -350,5 +461,24 @@ export async function buildOmniRouteCatalog(ctx) {
     return {
         provider,
     };
+}
+export async function buildOmniRouteMediaCatalog(ctx) {
+    try {
+        const liveCatalog = await resolveOmniRouteLiveCatalog(ctx);
+        if (!liveCatalog) {
+            return null;
+        }
+        const rows = projectOmniRouteMediaCatalog(liveCatalog.entries, [
+            "image_generation",
+            "video_generation",
+            "music_generation",
+        ]);
+        return rows.length > 0 ? rows : null;
+    }
+    catch (err) {
+        const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config, env: ctx.env });
+        console.warn(`[omniroute] Live media model discovery failed (${redactOmniRouteBaseUrl(baseUrl)}): ${redactLiveDiscoveryError(err)}`);
+        return null;
+    }
 }
 //# sourceMappingURL=provider-catalog.js.map

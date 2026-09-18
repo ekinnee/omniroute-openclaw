@@ -15,6 +15,7 @@ import { omniRouteEmbeddingProviderAdapter } from "./embedding-provider.js";
 import { buildOmniRouteImageGenerationProvider } from "./image-generation-provider.js";
 import {
   buildOmniRouteCatalog,
+  buildOmniRouteMediaCatalog,
 } from "./provider-catalog.js";
 import { createOmniRouteWebSearchProvider } from "./web-search-provider.js";
 import { buildOmniRouteVideoGenerationProvider } from "./video-generation-provider.js";
@@ -69,6 +70,12 @@ const plugin: OpenClawPluginDefinition = definePluginEntry({
       isModernModelRef: () => true,
       resolveUsageAuth: resolveOmniRouteUsageAuth,
       fetchUsageSnapshot: fetchOmniRouteUsage,
+    });
+
+    api.registerModelCatalogProvider({
+      provider: OMNIROUTE_PROVIDER_ID,
+      kinds: ["image_generation", "video_generation", "music_generation"],
+      liveCatalog: (ctx) => buildOmniRouteMediaCatalog(ctx),
     });
 
     api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);

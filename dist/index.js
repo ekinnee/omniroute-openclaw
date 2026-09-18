@@ -5,7 +5,7 @@ import { applyOmniRouteConfig } from "./onboard.js";
 import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_BASE_URL_ENV_VAR, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { omniRouteEmbeddingProviderAdapter } from "./embedding-provider.js";
 import { buildOmniRouteImageGenerationProvider } from "./image-generation-provider.js";
-import { buildOmniRouteCatalog, } from "./provider-catalog.js";
+import { buildOmniRouteCatalog, buildOmniRouteMediaCatalog, } from "./provider-catalog.js";
 import { createOmniRouteWebSearchProvider } from "./web-search-provider.js";
 import { buildOmniRouteVideoGenerationProvider } from "./video-generation-provider.js";
 import { buildOmniRouteReplayPolicy, buildOmniRouteThinkingProfile, } from "./provider-compat.js";
@@ -55,6 +55,11 @@ const plugin = definePluginEntry({
             isModernModelRef: () => true,
             resolveUsageAuth: resolveOmniRouteUsageAuth,
             fetchUsageSnapshot: fetchOmniRouteUsage,
+        });
+        api.registerModelCatalogProvider({
+            provider: OMNIROUTE_PROVIDER_ID,
+            kinds: ["image_generation", "video_generation", "music_generation"],
+            liveCatalog: (ctx) => buildOmniRouteMediaCatalog(ctx),
         });
         api.registerEmbeddingProvider(omniRouteEmbeddingProviderAdapter);
         api.registerImageGenerationProvider(buildOmniRouteImageGenerationProvider());

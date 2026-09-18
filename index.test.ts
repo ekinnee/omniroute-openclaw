@@ -241,7 +241,13 @@ describe("omniroute plugin entry and integration", () => {
         buildReplayPolicy: expect.any(Function),
       }),
     );
-    expect(registerModelCatalogProvider).not.toHaveBeenCalled();
+    expect(registerModelCatalogProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        provider: "omniroute",
+        kinds: ["image_generation", "video_generation", "music_generation"],
+        liveCatalog: expect.any(Function),
+      }),
+    );
     expect(registerProvider).toHaveBeenCalledWith(
       expect.objectContaining({
         catalog: expect.objectContaining({ run: expect.any(Function) }),
