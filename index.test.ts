@@ -17,6 +17,7 @@ const REQUIRED_OPENCLAW_SDK_EXPORTS = [
   "./plugin-sdk/provider-transport-runtime",
   "./plugin-sdk/provider-usage",
   "./plugin-sdk/music-generation",
+  "./plugin-sdk/provider-web-fetch",
 ] as const;
 
 function mockCatalogResponse(payload: unknown, status = 200): Response {
@@ -55,6 +56,7 @@ describe("omniroute plugin entry and integration", () => {
       "video-generation",
       "music-generation",
       "speech",
+      "web-fetch",
       "web-search",
     ]);
     expect(pkg.openclaw.compat.pluginApi).toBeDefined();
@@ -92,6 +94,7 @@ describe("omniroute plugin entry and integration", () => {
       "video-generation-provider.ts",
       "music-generation-provider.ts",
       "speech-provider.ts",
+      "web-fetch-provider.ts",
       "web-search-provider.ts",
       "auth.ts",
       "http.ts",
@@ -130,6 +133,7 @@ describe("omniroute plugin entry and integration", () => {
     expect(manifest.contracts.usageProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.musicGenerationProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.speechProviders).toEqual(["omniroute"]);
+    expect(manifest.contracts.webFetchProviders).toEqual(["omniroute"]);
     expect(manifest.modelCatalog.providers).toBeUndefined();
     expect(manifest.modelCatalog.discovery).toEqual({ omniroute: "runtime" });
   });
@@ -230,6 +234,7 @@ describe("omniroute plugin entry and integration", () => {
     const registerEmbeddingProvider = vi.fn();
     const registerImageGenerationProvider = vi.fn();
     const registerWebSearchProvider = vi.fn();
+    const registerWebFetchProvider = vi.fn();
     const registerVideoGenerationProvider = vi.fn();
     const registerMusicGenerationProvider = vi.fn();
     const registerSpeechProvider = vi.fn();
@@ -240,6 +245,7 @@ describe("omniroute plugin entry and integration", () => {
       registerEmbeddingProvider,
       registerImageGenerationProvider,
       registerWebSearchProvider,
+      registerWebFetchProvider,
       registerVideoGenerationProvider,
       registerMusicGenerationProvider,
       registerSpeechProvider,
@@ -319,6 +325,13 @@ describe("omniroute plugin entry and integration", () => {
         defaultTimeoutMs: 120_000,
         voices: expect.arrayContaining(["coral", "alloy"]),
         synthesize: expect.any(Function),
+      }),
+    );
+    expect(registerWebFetchProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "omniroute",
+        label: "OmniRoute",
+        createTool: expect.any(Function),
       }),
     );
   });

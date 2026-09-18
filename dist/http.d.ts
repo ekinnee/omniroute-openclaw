@@ -83,6 +83,14 @@ export declare const OMNIROUTE_JSON_READ_OPTIONS: {
         readonly maxBytes: number;
         readonly chunkTimeoutMs: 30000;
     };
+    readonly webFetch: {
+        readonly maxBytes: number;
+        readonly chunkTimeoutMs: 30000;
+    };
+    readonly webFetchError: {
+        readonly maxBytes: number;
+        readonly chunkTimeoutMs: 5000;
+    };
 };
 export declare function readOmniRouteBytes(response: Response, operation: string, options?: OmniRouteJsonReadOptions): Promise<Uint8Array>;
 export declare function readOmniRouteText(response: Response, operation: string, options?: OmniRouteJsonReadOptions): Promise<string>;

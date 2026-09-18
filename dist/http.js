@@ -192,6 +192,14 @@ export const OMNIROUTE_JSON_READ_OPTIONS = {
         maxBytes: 4 * MEBIBYTE,
         chunkTimeoutMs: 30_000,
     },
+    webFetch: {
+        maxBytes: 8 * MEBIBYTE,
+        chunkTimeoutMs: 30_000,
+    },
+    webFetchError: {
+        maxBytes: 64 * 1024,
+        chunkTimeoutMs: 5_000,
+    },
 };
 async function readOmniRouteJsonBytes(response, operation, maxBytes, chunkTimeoutMs) {
     if (!Number.isSafeInteger(maxBytes) || maxBytes < 0) {
