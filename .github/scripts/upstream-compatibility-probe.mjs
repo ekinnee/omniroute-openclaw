@@ -150,6 +150,7 @@ async function runInstalledArtifact() {
 
   const registered = {
     provider: 0,
+    modelCatalog: 0,
     embedding: 0,
     image: 0,
     video: 0,
@@ -157,6 +158,7 @@ async function runInstalledArtifact() {
   };
   const registrations = {
     provider: [],
+    modelCatalog: [],
     embedding: [],
     image: [],
     video: [],
@@ -167,6 +169,10 @@ async function runInstalledArtifact() {
     registerProvider: (provider) => {
       registered.provider++;
       registrations.provider.push(provider);
+    },
+    registerModelCatalogProvider: (provider) => {
+      registered.modelCatalog++;
+      registrations.modelCatalog.push(provider);
     },
     registerEmbeddingProvider: (provider) => {
       registered.embedding++;
@@ -190,6 +196,14 @@ async function runInstalledArtifact() {
     assertEqual(count, 1, `${capability} registration count`);
   }
   for (const capability of Object.keys(registered)) {
+    if (capability === "modelCatalog") {
+      assertEqual(
+        registrations[capability][0]?.provider,
+        "omniroute",
+        `${capability} registration provider`,
+      );
+      continue;
+    }
     assertEqual(
       registrations[capability][0]?.id,
       "omniroute",
@@ -207,7 +221,10 @@ async function runInstalledArtifact() {
       openClawVersion: openClawPackage.version,
       registrations: registered,
       registrationIds: Object.fromEntries(
-        Object.entries(registrations).map(([capability, values]) => [capability, values[0].id]),
+        Object.entries(registrations).map(([capability, values]) => [
+          capability,
+          capability === "modelCatalog" ? values[0].provider : values[0].id,
+        ]),
       ),
       providerId: registrations.provider[0].id,
       catalogRun: true,
