@@ -1,4 +1,4 @@
-import type { ProviderCatalogContext, ProviderCatalogResult } from "openclaw/plugin-sdk/plugin-entry";
+import type { ProviderCatalogContext, ProviderCatalogResult, UnifiedModelCatalogEntry, UnifiedModelCatalogProviderContext } from "openclaw/plugin-sdk/plugin-entry";
 import { type OmniRouteModelDefinition } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
 type OmniRouteProviderConfig = {
@@ -14,6 +14,7 @@ type OmniRouteModelEntry = {
     type?: unknown;
     supported_endpoints?: unknown;
     output_modalities?: unknown;
+    media_capabilities?: unknown;
     context_length?: unknown;
     max_input_tokens?: unknown;
     contextWindow?: unknown;
@@ -72,5 +73,6 @@ export declare function resolveOmniRouteCatalogCredentials(params: {
 }): OmniRouteCatalogCredentials | null | Promise<OmniRouteCatalogCredentials | null>;
 export declare function buildLiveOmniRouteProvider(ctx: ProviderCatalogContext): Promise<OmniRouteProviderConfig | null>;
 export declare function buildOmniRouteCatalog(ctx: ProviderCatalogContext): Promise<ProviderCatalogResult>;
+export declare function buildOmniRouteMediaCatalog(ctx: UnifiedModelCatalogProviderContext): Promise<readonly UnifiedModelCatalogEntry[] | null>;
 export {};
 //# sourceMappingURL=provider-catalog.d.ts.map

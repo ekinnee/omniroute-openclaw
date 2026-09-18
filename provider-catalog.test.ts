@@ -175,6 +175,157 @@ describe("OmniRoute provider catalog", () => {
     });
   });
 
+  it("shares one authenticated catalog fetch across chat and media projections", async () => {
+    const { buildLiveOmniRouteProvider, buildOmniRouteMediaCatalog } = await import(
+      "./provider-catalog.js"
+    );
+    const capabilities = { image_edit: true, supports_audio: false };
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      mockCatalogResponse({
+        data: [
+          {
+            id: "provider/chat",
+            type: "chat",
+            context_length: 42_000,
+            max_output_tokens: 3_000,
+          },
+          {
+            id: "provider/image",
+            name: "Image model",
+            supported_endpoints: ["images"],
+            output_modalities: ["image"],
+            media_capabilities: capabilities,
+          },
+          {
+            id: "provider/image-generations",
+            type: "image",
+            supported_endpoints: ["images-generations"],
+            media_capabilities: { image_edit: false },
+          },
+          {
+            id: "provider/video",
+            supported_endpoints: ["/v1/videos/generations"],
+            media_capabilities: { video: true },
+          },
+          {
+            id: "provider/music",
+            type: "music",
+            output_modalities: ["audio"],
+            media_capabilities: { music: true },
+          },
+          {
+            id: "provider/speech",
+            supported_endpoints: ["/v1/audio/speech"],
+          },
+        ],
+      }),
+    );
+    const context = mockCatalogContext({
+      baseUrl: "http://shared-catalog.example/v1",
+      apiKey: "shared-secret",
+    });
+
+    const [chat, media] = await Promise.all([
+      buildLiveOmniRouteProvider(context),
+      buildOmniRouteMediaCatalog(context),
+    ]);
+
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(chat?.models.map((model) => model.id)).toEqual(["provider/chat"]);
+    expect(media).toEqual([
+      {
+        kind: "image_generation",
+        provider: "omniroute",
+        model: "provider/image",
+        label: "Image model",
+        source: "live",
+        capabilities,
+      },
+      {
+        kind: "image_generation",
+        provider: "omniroute",
+        model: "provider/image-generations",
+        source: "live",
+        capabilities: { image_edit: false },
+      },
+      {
+        kind: "video_generation",
+        provider: "omniroute",
+        model: "provider/video",
+        source: "live",
+        capabilities: { video: true },
+      },
+      {
+        kind: "music_generation",
+        provider: "omniroute",
+        model: "provider/music",
+        source: "live",
+        capabilities: { music: true },
+      },
+    ]);
+  });
+
+  it("does not let a canceled media caller abort a shared catalog fetch", async () => {
+    const { buildLiveOmniRouteProvider, buildOmniRouteMediaCatalog } = await import(
+      "./provider-catalog.js"
+    );
+    let resolveResponse!: (response: Response) => void;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockReturnValue(
+      new Promise<Response>((resolve) => {
+        resolveResponse = resolve;
+      }),
+    );
+    const controller = new AbortController();
+    const context = mockCatalogContext({
+      baseUrl: "http://cancellation-isolation.example/v1",
+      apiKey: "shared-secret",
+    });
+    const canceledMedia = buildOmniRouteMediaCatalog({
+      ...context,
+      signal: controller.signal,
+    } as never);
+    const chat = buildLiveOmniRouteProvider(context);
+
+    await vi.waitFor(() => expect(fetchMock).toHaveBeenCalledTimes(1));
+    controller.abort(new Error("caller canceled"));
+    await expect(canceledMedia).resolves.toBeNull();
+
+    resolveResponse(
+      mockCatalogResponse({
+        data: [{ id: "provider/chat", type: "chat", context_length: 42_000, max_output_tokens: 3_000 }],
+      }),
+    );
+    await expect(chat).resolves.toMatchObject({ models: [{ id: "provider/chat" }] });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not retain a raw catalog with no usable projection", async () => {
+    const { buildOmniRouteMediaCatalog } = await import("./provider-catalog.js");
+    const fetchMock = vi
+      .spyOn(globalThis, "fetch")
+      .mockResolvedValueOnce(
+        mockCatalogResponse({ data: [{ id: "incomplete-chat", type: "chat" }] }),
+      )
+      .mockResolvedValueOnce(
+        mockCatalogResponse({
+          data: [{ id: "provider/image", supported_endpoints: ["images"] }],
+        }),
+      );
+    const context = mockCatalogContext({
+      baseUrl: "http://unusable-catalog.example/v1",
+      apiKey: "shared-secret",
+    });
+
+    await expect(buildOmniRouteMediaCatalog(context)).resolves.toBeNull();
+    await expect(buildOmniRouteMediaCatalog(context)).resolves.toEqual([
+      expect.objectContaining({
+        kind: "image_generation",
+        model: "provider/image",
+      }),
+    ]);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
   it.each([
     { advertised: false, expected: false },
     { advertised: true, expected: true },
@@ -431,6 +582,7 @@ describe("OmniRoute provider catalog", () => {
     const registerProvider = vi.fn();
     plugin.default.register({
       registerProvider,
+      registerModelCatalogProvider: vi.fn(),
       registerEmbeddingProvider: vi.fn(),
       registerImageGenerationProvider: vi.fn(),
       registerWebSearchProvider: vi.fn(),
