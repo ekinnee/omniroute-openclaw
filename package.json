@@ -13,6 +13,7 @@
     "image-generation",
     "video-generation",
     "music-generation",
+    "speech",
     "web-search"
   ],
   "type": "module",

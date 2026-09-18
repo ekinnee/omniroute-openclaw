@@ -184,6 +184,10 @@ export const OMNIROUTE_JSON_READ_OPTIONS = {
         maxBytes: 24 * MEBIBYTE,
         chunkTimeoutMs: 30_000,
     },
+    speech: {
+        maxBytes: 16 * MEBIBYTE,
+        chunkTimeoutMs: 30_000,
+    },
     webSearch: {
         maxBytes: 4 * MEBIBYTE,
         chunkTimeoutMs: 30_000,

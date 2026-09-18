@@ -75,6 +75,10 @@ export declare const OMNIROUTE_JSON_READ_OPTIONS: {
         readonly maxBytes: number;
         readonly chunkTimeoutMs: 30000;
     };
+    readonly speech: {
+        readonly maxBytes: number;
+        readonly chunkTimeoutMs: 30000;
+    };
     readonly webSearch: {
         readonly maxBytes: number;
         readonly chunkTimeoutMs: 30000;

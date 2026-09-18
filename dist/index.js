@@ -9,6 +9,7 @@ import { buildOmniRouteCatalog, buildOmniRouteMediaCatalog, } from "./provider-c
 import { createOmniRouteWebSearchProvider } from "./web-search-provider.js";
 import { buildOmniRouteVideoGenerationProvider } from "./video-generation-provider.js";
 import { buildOmniRouteMusicGenerationProvider } from "./music-generation-provider.js";
+import { buildOmniRouteSpeechProvider } from "./speech-provider.js";
 import { buildOmniRouteReplayPolicy, buildOmniRouteThinkingProfile, } from "./provider-compat.js";
 import { fetchOmniRouteUsage, resolveOmniRouteUsageAuth } from "./usage.js";
 const plugin = definePluginEntry({
@@ -67,6 +68,7 @@ const plugin = definePluginEntry({
         api.registerWebSearchProvider(createOmniRouteWebSearchProvider());
         api.registerVideoGenerationProvider(buildOmniRouteVideoGenerationProvider());
         api.registerMusicGenerationProvider(buildOmniRouteMusicGenerationProvider());
+        api.registerSpeechProvider(buildOmniRouteSpeechProvider());
     },
 });
 export default plugin;
