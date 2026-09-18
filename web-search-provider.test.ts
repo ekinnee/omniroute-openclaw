@@ -292,4 +292,33 @@ describe("OmniRoute web search provider", () => {
     expect(requestSignal?.aborted).toBe(true);
     expect(fetchMock).toHaveBeenCalledTimes(1);
   });
+
+  it("uses OMNIROUTE_BASE_URL for web search when provider config has the default URL", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(JSON.stringify({ results: [] }), {
+        status: 200,
+        headers: { "content-type": "application/json" },
+      }),
+    );
+    vi.stubEnv("OMNIROUTE_BASE_URL", "https://env-omniroute.example/v1/");
+    const { createOmniRouteWebSearchProvider } = await import("./web-search-provider.js");
+    const provider = createOmniRouteWebSearchProvider();
+    const tool = provider.createTool({
+      config: {
+        models: {
+          providers: {
+            omniroute: { baseUrl: "http://localhost:20128/v1" },
+          },
+        },
+      },
+      searchConfig: { apiKey: "secret-key" },
+    } as never);
+
+    await tool.execute({ query: "OmniRoute" });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "https://env-omniroute.example/v1/search",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
 });
