@@ -69,6 +69,7 @@ function assertPluginManifest(packageRoot) {
     "embeddingProviders",
     "imageGenerationProviders",
     "usageProviders",
+    "speechProviders",
     "videoGenerationProviders",
     "musicGenerationProviders",
     "webSearchProviders",
@@ -154,6 +155,7 @@ async function runInstalledArtifact() {
     modelCatalog: 0,
     embedding: 0,
     image: 0,
+    speech: 0,
     video: 0,
     music: 0,
     webSearch: 0,
@@ -163,6 +165,7 @@ async function runInstalledArtifact() {
     modelCatalog: [],
     embedding: [],
     image: [],
+    speech: [],
     video: [],
     music: [],
     webSearch: [],
@@ -184,6 +187,10 @@ async function runInstalledArtifact() {
     registerImageGenerationProvider: (provider) => {
       registered.image++;
       registrations.image.push(provider);
+    },
+    registerSpeechProvider: (provider) => {
+      registered.speech++;
+      registrations.speech.push(provider);
     },
     registerVideoGenerationProvider: (provider) => {
       registered.video++;

@@ -54,6 +54,7 @@ describe("omniroute plugin entry and integration", () => {
       "image-generation",
       "video-generation",
       "music-generation",
+      "speech",
       "web-search",
     ]);
     expect(pkg.openclaw.compat.pluginApi).toBeDefined();
@@ -90,6 +91,7 @@ describe("omniroute plugin entry and integration", () => {
       "image-generation-provider.ts",
       "video-generation-provider.ts",
       "music-generation-provider.ts",
+      "speech-provider.ts",
       "web-search-provider.ts",
       "auth.ts",
       "http.ts",
@@ -127,6 +129,7 @@ describe("omniroute plugin entry and integration", () => {
     expect(manifest.contracts.imageGenerationProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.usageProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.musicGenerationProviders).toEqual(["omniroute"]);
+    expect(manifest.contracts.speechProviders).toEqual(["omniroute"]);
     expect(manifest.modelCatalog.providers).toBeUndefined();
     expect(manifest.modelCatalog.discovery).toEqual({ omniroute: "runtime" });
   });
@@ -229,6 +232,7 @@ describe("omniroute plugin entry and integration", () => {
     const registerWebSearchProvider = vi.fn();
     const registerVideoGenerationProvider = vi.fn();
     const registerMusicGenerationProvider = vi.fn();
+    const registerSpeechProvider = vi.fn();
 
     plugin.default.register({
       registerProvider,
@@ -238,6 +242,7 @@ describe("omniroute plugin entry and integration", () => {
       registerWebSearchProvider,
       registerVideoGenerationProvider,
       registerMusicGenerationProvider,
+      registerSpeechProvider,
     } as never);
 
     expect(registerProvider).toHaveBeenCalledWith(
@@ -305,6 +310,15 @@ describe("omniroute plugin entry and integration", () => {
           edit: { enabled: false },
         }),
         generateMusic: expect.any(Function),
+      }),
+    );
+    expect(registerSpeechProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "omniroute",
+        label: "OmniRoute",
+        defaultTimeoutMs: 120_000,
+        voices: expect.arrayContaining(["coral", "alloy"]),
+        synthesize: expect.any(Function),
       }),
     );
   });
