@@ -16,6 +16,7 @@ const REQUIRED_OPENCLAW_SDK_EXPORTS = [
   "./plugin-sdk/ssrf-runtime",
   "./plugin-sdk/provider-transport-runtime",
   "./plugin-sdk/provider-usage",
+  "./plugin-sdk/music-generation",
 ] as const;
 
 function mockCatalogResponse(payload: unknown, status = 200): Response {
@@ -52,6 +53,7 @@ describe("omniroute plugin entry and integration", () => {
       "embeddings",
       "image-generation",
       "video-generation",
+      "music-generation",
       "web-search",
     ]);
     expect(pkg.openclaw.compat.pluginApi).toBeDefined();
@@ -87,6 +89,7 @@ describe("omniroute plugin entry and integration", () => {
       "embedding-provider.ts",
       "image-generation-provider.ts",
       "video-generation-provider.ts",
+      "music-generation-provider.ts",
       "web-search-provider.ts",
       "auth.ts",
       "http.ts",
@@ -123,6 +126,7 @@ describe("omniroute plugin entry and integration", () => {
     expect(manifest.contracts.embeddingProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.imageGenerationProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.usageProviders).toEqual(["omniroute"]);
+    expect(manifest.contracts.musicGenerationProviders).toEqual(["omniroute"]);
     expect(manifest.modelCatalog.providers).toBeUndefined();
     expect(manifest.modelCatalog.discovery).toEqual({ omniroute: "runtime" });
   });
@@ -224,6 +228,7 @@ describe("omniroute plugin entry and integration", () => {
     const registerImageGenerationProvider = vi.fn();
     const registerWebSearchProvider = vi.fn();
     const registerVideoGenerationProvider = vi.fn();
+    const registerMusicGenerationProvider = vi.fn();
 
     plugin.default.register({
       registerProvider,
@@ -232,6 +237,7 @@ describe("omniroute plugin entry and integration", () => {
       registerImageGenerationProvider,
       registerWebSearchProvider,
       registerVideoGenerationProvider,
+      registerMusicGenerationProvider,
     } as never);
 
     expect(registerProvider).toHaveBeenCalledWith(
@@ -290,6 +296,17 @@ describe("omniroute plugin entry and integration", () => {
       label: "OmniRoute",
     });
     expect(imageProvider).not.toHaveProperty("defaultModel");
+    expect(registerMusicGenerationProvider).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: "omniroute",
+        label: "OmniRoute",
+        capabilities: expect.objectContaining({
+          generate: {},
+          edit: { enabled: false },
+        }),
+        generateMusic: expect.any(Function),
+      }),
+    );
   });
 
   it("resolves provider profile credentials instead of sending profile ids", async () => {

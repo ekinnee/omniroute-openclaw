@@ -587,6 +587,7 @@ describe("OmniRoute provider catalog", () => {
       registerImageGenerationProvider: vi.fn(),
       registerWebSearchProvider: vi.fn(),
       registerVideoGenerationProvider: vi.fn(),
+      registerMusicGenerationProvider: vi.fn(),
     } as never);
     const resolveThinkingProfile = registerProvider.mock.calls[0]?.[0].resolveThinkingProfile;
     expect(resolveThinkingProfile).toBeTypeOf("function");

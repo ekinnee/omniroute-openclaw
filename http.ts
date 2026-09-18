@@ -261,6 +261,11 @@ export const OMNIROUTE_JSON_READ_OPTIONS = {
     maxBytes: 24 * MEBIBYTE,
     chunkTimeoutMs: 30_000,
   },
+  musicGeneration: {
+    // A default 16 MiB audio track expands to about 21.4 MiB in base64, plus JSON.
+    maxBytes: 24 * MEBIBYTE,
+    chunkTimeoutMs: 30_000,
+  },
   webSearch: {
     maxBytes: 4 * MEBIBYTE,
     chunkTimeoutMs: 30_000,
@@ -333,17 +338,25 @@ async function readOmniRouteJsonBytes(
   return bytes;
 }
 
-export async function readOmniRouteText(
+export async function readOmniRouteBytes(
   response: Response,
   operation: string,
   options: OmniRouteJsonReadOptions = DEFAULT_OMNIROUTE_JSON_READ_OPTIONS,
-): Promise<string> {
-  const bytes = await readOmniRouteJsonBytes(
+): Promise<Uint8Array> {
+  return readOmniRouteJsonBytes(
     response,
     operation,
     options.maxBytes ?? DEFAULT_OMNIROUTE_JSON_READ_OPTIONS.maxBytes,
     options.chunkTimeoutMs ?? DEFAULT_OMNIROUTE_JSON_READ_OPTIONS.chunkTimeoutMs,
   );
+}
+
+export async function readOmniRouteText(
+  response: Response,
+  operation: string,
+  options: OmniRouteJsonReadOptions = DEFAULT_OMNIROUTE_JSON_READ_OPTIONS,
+): Promise<string> {
+  const bytes = await readOmniRouteBytes(response, operation, options);
   return new TextDecoder("utf-8", { fatal: false }).decode(bytes);
 }
 
@@ -354,12 +367,7 @@ export async function readOmniRouteJson(
 ): Promise<unknown> {
   // All provider responses must stay bounded. Endpoint-specific callers can
   // raise the default for known larger payloads, but never opt out of a limit.
-  const bytes = await readOmniRouteJsonBytes(
-    response,
-    operation,
-    options.maxBytes ?? DEFAULT_OMNIROUTE_JSON_READ_OPTIONS.maxBytes,
-    options.chunkTimeoutMs ?? DEFAULT_OMNIROUTE_JSON_READ_OPTIONS.chunkTimeoutMs,
-  );
+  const bytes = await readOmniRouteBytes(response, operation, options);
   try {
     return JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch {
@@ -370,5 +378,60 @@ export async function readOmniRouteJson(
 export async function assertOmniRouteOk(response: Response, operation: string): Promise<void> {
   if (!response.ok) {
     throw new Error(`${operation}: HTTP ${response.status}`);
+  }
+}
+
+const MAX_GENERATED_MUSIC_DOWNLOAD_BYTES = 16 * MEBIBYTE;
+
+function normalizeAudioMimeType(value: string | null | undefined): string | undefined {
+  const normalized = value?.split(";", 1)[0]?.trim().toLowerCase();
+  if (!normalized || normalized === "application/octet-stream" || normalized === "binary/octet-stream") {
+    return undefined;
+  }
+  if (!normalized.startsWith("audio/")) {
+    throw new Error(`OmniRoute generated music download returned a non-audio MIME type: ${normalized}`);
+  }
+  return normalized;
+}
+
+export async function downloadOmniRouteMusicAsset(params: {
+  url: string;
+  timeoutMs?: number;
+  mimeType?: string;
+  maxBytes?: number;
+  chunkTimeoutMs?: number;
+}): Promise<{ buffer: Buffer; mimeType: string }> {
+  let parsedUrl: URL;
+  try {
+    parsedUrl = new URL(params.url);
+  } catch {
+    throw new Error("OmniRoute generated music URL is invalid");
+  }
+  if (parsedUrl.protocol !== "http:" && parsedUrl.protocol !== "https:") {
+    throw new Error("OmniRoute generated music URL must use http or https");
+  }
+
+  const { response, release } = await fetchWithSsrFGuard({
+    url: parsedUrl.toString(),
+    init: { method: "GET" },
+    timeoutMs: params.timeoutMs,
+    mode: "strict",
+    auditContext: "omniroute.music-generation.download",
+  });
+  try {
+    await assertOmniRouteOk(response, "OmniRoute generated music download failed");
+    const responseMimeType = normalizeAudioMimeType(response.headers.get("content-type"));
+    const declaredMimeType = normalizeAudioMimeType(params.mimeType);
+    const mimeType = responseMimeType ?? declaredMimeType;
+    if (!mimeType) {
+      throw new Error("OmniRoute generated music download did not identify an audio MIME type");
+    }
+    const bytes = await readOmniRouteBytes(response, "OmniRoute generated music download", {
+      maxBytes: params.maxBytes ?? MAX_GENERATED_MUSIC_DOWNLOAD_BYTES,
+      chunkTimeoutMs: params.chunkTimeoutMs ?? OMNIROUTE_JSON_READ_OPTIONS.musicGeneration.chunkTimeoutMs,
+    });
+    return { buffer: Buffer.from(bytes), mimeType };
+  } finally {
+    await release();
   }
 }

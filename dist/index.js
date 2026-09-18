@@ -8,6 +8,7 @@ import { buildOmniRouteImageGenerationProvider } from "./image-generation-provid
 import { buildOmniRouteCatalog, buildOmniRouteMediaCatalog, } from "./provider-catalog.js";
 import { createOmniRouteWebSearchProvider } from "./web-search-provider.js";
 import { buildOmniRouteVideoGenerationProvider } from "./video-generation-provider.js";
+import { buildOmniRouteMusicGenerationProvider } from "./music-generation-provider.js";
 import { buildOmniRouteReplayPolicy, buildOmniRouteThinkingProfile, } from "./provider-compat.js";
 import { fetchOmniRouteUsage, resolveOmniRouteUsageAuth } from "./usage.js";
 const plugin = definePluginEntry({
@@ -65,6 +66,7 @@ const plugin = definePluginEntry({
         api.registerImageGenerationProvider(buildOmniRouteImageGenerationProvider());
         api.registerWebSearchProvider(createOmniRouteWebSearchProvider());
         api.registerVideoGenerationProvider(buildOmniRouteVideoGenerationProvider());
+        api.registerMusicGenerationProvider(buildOmniRouteMusicGenerationProvider());
     },
 });
 export default plugin;

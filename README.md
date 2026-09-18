@@ -1,6 +1,6 @@
 # OmniRoute Provider Plugin for OpenClaw
 
-Registers [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — a multi-provider model routing proxy — as a first-class text inference, embedding, image generation, video generation, and web search provider in [OpenClaw](https://github.com/openclaw/openclaw). Install the plugin from [ClawHub](https://clawhub.ai/ekinnee/plugins/omniroute-provider). Routes through models from 236+ providers with automatic fallback, live model discovery, and OpenAI-compatible transport.
+Registers [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — a multi-provider model routing proxy — as a first-class text inference, embedding, image generation, video generation, music generation, and web search provider in [OpenClaw](https://github.com/openclaw/openclaw). Install the plugin from [ClawHub](https://clawhub.ai/ekinnee/plugins/omniroute-provider). Routes through models from 236+ providers with automatic fallback, live model discovery, and OpenAI-compatible transport.
 
 Current release: `2.2.0`. See the [changelog](CHANGELOG.md) for version history
 and the [GitHub Release](https://github.com/ekinnee/omniroute-openclaw/releases/tag/v2.2.0)
@@ -25,7 +25,7 @@ export OMNIROUTE_API_KEY="your-key-here"
 openclaw models list | grep omniroute
 ```
 
-OmniRoute appears as a model provider after authenticated discovery. The gateway URL is `models.providers.omniroute.baseUrl`; its default, `http://localhost:20128/v1`, works only when OmniRoute runs on the same host. For discovery, chat, embeddings, image and video generation, web search, usage, and the catalog audit, an explicit non-default provider URL wins; otherwise `OMNIROUTE_BASE_URL` is used before the localhost default. Select any chat-capable model or combo returned by your OmniRoute gateway; the available list depends on that gateway's configured upstream providers and API-key permissions.
+OmniRoute appears as a model provider after authenticated discovery. The gateway URL is `models.providers.omniroute.baseUrl`; its default, `http://localhost:20128/v1`, works only when OmniRoute runs on the same host. For discovery, chat, embeddings, image, video and music generation, web search, usage, and the catalog audit, an explicit non-default provider URL wins; otherwise `OMNIROUTE_BASE_URL` is used before the localhost default. Select any chat-capable model or combo returned by your OmniRoute gateway; the available list depends on that gateway's configured upstream providers and API-key permissions.
 
 ## Upgrading to 2.0.0
 
@@ -64,7 +64,7 @@ The empty `models` array is intentional: OpenClaw requires it for an authored cu
 
 ### Transport TLS limitation
 
-For plugin-owned discovery, catalog audit, embeddings, image/video generation, and search requests, target TLS overrides in `models.providers.omniroute.request.tls` cannot be combined with `request.proxy.mode: "explicit-proxy"`. The plugin rejects this combination before making the request because the guarded SDK transport cannot represent independent target TLS settings for an explicit proxy. Direct and `env-proxy` transport retain support for target TLS overrides. This does not change the compatibility floor or OpenClaw-owned chat transport.
+For plugin-owned discovery, catalog audit, embeddings, image/video/music generation, and search requests, target TLS overrides in `models.providers.omniroute.request.tls` cannot be combined with `request.proxy.mode: "explicit-proxy"`. The plugin rejects this combination before making the request because the guarded SDK transport cannot represent independent target TLS settings for an explicit proxy. Direct and `env-proxy` transport retain support for target TLS overrides. This does not change the compatibility floor or OpenClaw-owned chat transport.
 
 ### Catalog Metadata Audit
 
@@ -151,15 +151,16 @@ The web search tool supports `query`, `count` (1-10), `freshness` (day/week/mont
 6. **OpenAI-compatible transport** — Text requests use standard OpenAI chat completions format (`POST /v1/chat/completions`) with streaming usage support.
 7. **Configured embeddings** — Embedding requests use OmniRoute's OpenAI-compatible `POST /v1/embeddings` endpoint and require a configured embedding model.
 8. **Configured image generation and editing** — Image generation uses `POST /v1/images/generations`. Edits send one reference image as a JSON data URL to `POST /v1/images/edits`. Both require a configured OmniRoute model that supports the requested operation.
-9. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
-10. **Provider quota usage** — OpenClaw status and usage views can read OmniRoute's credential-scoped cached quota snapshot from `GET /api/usage/om-usage`. Enable usage visibility for that OmniRoute API key; a key without that permission reports an explicit unavailable status and never exposes other gateway connections.
+9. **Music generation** — Music requests use `POST /v1/music/generations` with an explicitly selected model and prompt. Inline base64 and hosted URL results are materialized as bounded audio assets through guarded transport; edit and image-conditioned modes remain disabled until OmniRoute exposes a uniform contract.
+10. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
+11. **Provider quota usage** — OpenClaw status and usage views can read OmniRoute's credential-scoped cached quota snapshot from `GET /api/usage/om-usage`. Enable usage visibility for that OmniRoute API key; a key without that permission reports an explicit unavailable status and never exposes other gateway connections.
 
 Temperature suppression and arbitrary provider-specific request flags are not inferred from catalog rows. They require future transport-level support and validation.
 
 ## Roadmap
 
 The plugin currently exposes OmniRoute as OpenAI-compatible chat, embedding,
-image-generation, video-generation, and web-search providers. The longer-term
+image-generation, video-generation, music-generation, and web-search providers. The longer-term
 goal is to cover OmniRoute's full published API surface as OpenClaw plugin
 capabilities mature.
 
@@ -179,7 +180,7 @@ capabilities mature.
 | Speech (`/v1/audio/speech`) | 🔜 Planned — text-to-speech provider |
 | Batch transcription (`/v1/audio/transcriptions`) | 🔜 Planned — media-understanding audio transcription, not realtime transcription |
 | Video generation (`/v1/videos/generations`) | ✅ Initial support |
-| Music generation (`/v1/music/generations`) | 🔜 Planned |
+| Music generation (`/v1/music/generations`) | ✅ Initial support — prompt generation with inline or hosted audio; edits deferred |
 
 ### Needs a broader OpenClaw SDK surface
 

@@ -70,6 +70,7 @@ function assertPluginManifest(packageRoot) {
     "imageGenerationProviders",
     "usageProviders",
     "videoGenerationProviders",
+    "musicGenerationProviders",
     "webSearchProviders",
   ]) {
     assertArrayIncludes(manifest.contracts?.[contract], providerId, `manifest ${contract}`);
@@ -154,6 +155,7 @@ async function runInstalledArtifact() {
     embedding: 0,
     image: 0,
     video: 0,
+    music: 0,
     webSearch: 0,
   };
   const registrations = {
@@ -162,6 +164,7 @@ async function runInstalledArtifact() {
     embedding: [],
     image: [],
     video: [],
+    music: [],
     webSearch: [],
   };
 
@@ -185,6 +188,10 @@ async function runInstalledArtifact() {
     registerVideoGenerationProvider: (provider) => {
       registered.video++;
       registrations.video.push(provider);
+    },
+    registerMusicGenerationProvider: (provider) => {
+      registered.music++;
+      registrations.music.push(provider);
     },
     registerWebSearchProvider: (provider) => {
       registered.webSearch++;
