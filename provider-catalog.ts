@@ -16,6 +16,12 @@ import {
   readOmniRouteJson,
   resolveOmniRouteHttpRequestConfig,
 } from "./http.js";
+import {
+  isCatalogChatEntry,
+  isCatalogEmbeddingEntry,
+  isCatalogImageEntry,
+  normalizeCatalogStringArray,
+} from "./catalog-vocabulary.js";
 
 type OmniRouteProviderConfig = {
   baseUrl: string;
@@ -101,27 +107,6 @@ type OmniRouteModelEntry = {
   capabilities?: unknown;
 };
 
-const CHAT_MODEL_TYPES = new Set(["chat", "text", "llm", "language"]);
-const EMBEDDING_MODEL_TYPES = new Set(["embedding", "embeddings"]);
-const IMAGE_MODEL_TYPES = new Set(["image", "images"]);
-const NON_CHAT_MODEL_TYPES = new Set([
-  "embedding",
-  "image",
-  "rerank",
-  "audio",
-  "moderation",
-  "video",
-  "music",
-]);
-const CHAT_ENDPOINTS = new Set([
-  "chat",
-  "chat-completions",
-  "chat_completions",
-  "/v1/chat/completions",
-  "/api/v1/chat/completions",
-]);
-const EMBEDDING_ENDPOINTS = new Set(["embedding", "embeddings"]);
-const IMAGE_ENDPOINTS = new Set(["image", "images", "image-generation", "image_generation"]);
 const OMNIROUTE_CANONICAL_EFFORTS = ["none", "low", "medium", "high", "xhigh"] as const;
 const OPENCLAW_THINKING_LEVELS = [
   "off",
@@ -184,7 +169,7 @@ function readCapabilityBoolean(
 }
 
 function normalizeReasoningEfforts(value: unknown): string[] {
-  const efforts = normalizeStringArray(value);
+  const efforts = normalizeCatalogStringArray(value);
   return [...new Set(efforts.filter((effort) => SUPPORTED_EFFORT_VALUES.has(effort)))];
 }
 
@@ -263,16 +248,6 @@ function resolveOmniRouteCatalogHttpRequest(params: {
   });
 }
 
-function normalizeStringArray(value: unknown): string[] {
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value
-    .filter((item): item is string => typeof item === "string")
-    .map((item) => item.trim().toLowerCase())
-    .filter(Boolean);
-}
-
 function normalizeTrimmedStringArray(value: unknown): string[] {
   if (!Array.isArray(value)) {
     return [];
@@ -284,7 +259,7 @@ function normalizeTrimmedStringArray(value: unknown): string[] {
 }
 
 function normalizeInputModalities(entry: OmniRouteModelEntry): Array<"text" | "image"> {
-  const input = normalizeStringArray(entry.input_modalities);
+  const input = normalizeCatalogStringArray(entry.input_modalities);
   const hasImageInput =
     input.includes("image") ||
     hasCapability(entry, "vision") ||
@@ -292,59 +267,9 @@ function normalizeInputModalities(entry: OmniRouteModelEntry): Array<"text" | "i
   return hasImageInput ? ["text", "image"] : ["text"];
 }
 
-function isChatModelEntry(entry: OmniRouteModelEntry): boolean {
-  const outputModalities = normalizeStringArray(entry.output_modalities);
-  if (outputModalities.length > 0 && !outputModalities.includes("text")) {
-    return false;
-  }
-
-  const endpoints = normalizeStringArray(entry.supported_endpoints);
-  if (endpoints.length > 0) {
-    return endpoints.some((endpoint) => CHAT_ENDPOINTS.has(endpoint));
-  }
-
-  if (typeof entry.type !== "string" || entry.type.trim().length === 0) {
-    return true;
-  }
-  const type = entry.type.trim().toLowerCase();
-  if (NON_CHAT_MODEL_TYPES.has(type)) {
-    return false;
-  }
-  return CHAT_MODEL_TYPES.has(type);
-}
-
-function isEmbeddingModelEntry(entry: OmniRouteModelEntry): boolean {
-  const endpoints = normalizeStringArray(entry.supported_endpoints);
-  if (endpoints.length > 0) {
-    return endpoints.some((endpoint) => EMBEDDING_ENDPOINTS.has(endpoint));
-  }
-
-  if (typeof entry.type !== "string" || entry.type.trim().length === 0) {
-    return false;
-  }
-  return EMBEDDING_MODEL_TYPES.has(entry.type.trim().toLowerCase());
-}
-
-function isImageModelEntry(entry: OmniRouteModelEntry): boolean {
-  const outputModalities = normalizeStringArray(entry.output_modalities);
-  if (outputModalities.length > 0 && !outputModalities.includes("image")) {
-    return false;
-  }
-
-  const endpoints = normalizeStringArray(entry.supported_endpoints);
-  if (endpoints.length > 0) {
-    return endpoints.some((endpoint) => IMAGE_ENDPOINTS.has(endpoint));
-  }
-
-  if (typeof entry.type !== "string" || entry.type.trim().length === 0) {
-    return false;
-  }
-  return IMAGE_MODEL_TYPES.has(entry.type.trim().toLowerCase());
-}
-
 function buildOmniRouteModelFromCatalogEntry(entry: OmniRouteModelEntry) {
   const id = typeof entry.id === "string" ? entry.id.trim() : "";
-  if (!id || !isChatModelEntry(entry)) {
+  if (!id || !isCatalogChatEntry(entry)) {
     return null;
   }
 
@@ -392,7 +317,7 @@ export function buildOmniRouteEmbeddingModelFromCatalogEntry(
   entry: OmniRouteModelEntry,
 ): OmniRouteEmbeddingModel | null {
   const id = typeof entry.id === "string" ? entry.id.trim() : "";
-  if (!id || !isEmbeddingModelEntry(entry)) {
+  if (!id || !isCatalogEmbeddingEntry(entry)) {
     return null;
   }
 
@@ -422,7 +347,7 @@ export function buildOmniRouteImageModelFromCatalogEntry(
   entry: OmniRouteModelEntry,
 ): OmniRouteImageModel | null {
   const id = typeof entry.id === "string" ? entry.id.trim() : "";
-  if (!id || !isImageModelEntry(entry)) {
+  if (!id || !isCatalogImageEntry(entry)) {
     return null;
   }
 

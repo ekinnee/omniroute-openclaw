@@ -2,6 +2,7 @@ import { resolveOmniRouteApiKey } from "./auth.js";
 import { assertOmniRouteOk, getOmniRouteJson, OMNIROUTE_JSON_READ_OPTIONS, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_API_KEY_ENV_VAR, OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { redactOmniRouteBaseUrl, resolveOmniRouteBaseUrl } from "./base-url.js";
+import { isCatalogChatEntry, isCatalogEmbeddingEntry, isCatalogImageEntry, } from "./catalog-vocabulary.js";
 const ADVERTISED_MODEL_FIELDS = [
     "type",
     "supported_endpoints",
@@ -65,24 +66,13 @@ function hasAnyKey(value, keys) {
     return keys.some((key) => key in value);
 }
 function classifyCatalogEntry(entry) {
-    const type = typeof entry.type === "string" ? entry.type.trim().toLowerCase() : "";
-    const endpoints = Array.isArray(entry.supported_endpoints)
-        ? entry.supported_endpoints
-            .filter((value) => typeof value === "string")
-            .map((value) => value.trim().toLowerCase())
-        : [];
-    const outputModalities = Array.isArray(entry.output_modalities)
-        ? entry.output_modalities
-            .filter((value) => typeof value === "string")
-            .map((value) => value.trim().toLowerCase())
-        : [];
-    if (type === "embedding" || type === "embeddings" || endpoints.some((value) => value === "embedding" || value === "embeddings")) {
+    if (isCatalogEmbeddingEntry(entry)) {
         return "embedding";
     }
-    if (type === "image" || type === "images" || outputModalities.includes("image") || endpoints.some((value) => value === "image" || value === "images" || value === "image-generation" || value === "image_generation")) {
+    if (isCatalogImageEntry(entry)) {
         return "image";
     }
-    if (!type || ["chat", "text", "llm", "language"].includes(type) || endpoints.some((value) => value === "chat" || value === "chat-completions" || value === "chat_completions")) {
+    if (isCatalogChatEntry(entry)) {
         return "chat";
     }
     return "other";

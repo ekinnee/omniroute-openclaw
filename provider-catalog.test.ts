@@ -611,6 +611,14 @@ describe("OmniRoute provider catalog", () => {
           {
             context_length: 42_000,
             max_output_tokens: 3_000,
+            id: "openai/gpt-4o-mini",
+            object: "model",
+            supported_endpoints: ["/api/v1/chat/completions"],
+            type: "image",
+          },
+          {
+            context_length: 42_000,
+            max_output_tokens: 3_000,
             id: "hf/diffusion-model",
             object: "model",
             owned_by: "huggingface",
@@ -645,6 +653,7 @@ describe("OmniRoute provider catalog", () => {
       "auto/best-coding",
       "openrouter/google/gemini-pro",
       "openai/gpt-4.1",
+      "openai/gpt-4o-mini",
     ]);
     expect(models[0]).toMatchObject({
       id: "auto/best-coding",

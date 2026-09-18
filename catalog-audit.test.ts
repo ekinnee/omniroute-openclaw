@@ -73,6 +73,32 @@ describe("OmniRoute catalog audit", () => {
     expect(JSON.stringify(report)).not.toContain("16384");
   });
 
+  it.each(["/v1/chat/completions", "/api/v1/chat/completions"])(
+    "classifies %s as chat and reports its missing metadata",
+    (endpoint) => {
+      const report = buildOmniRouteCatalogAuditReport({
+        baseUrl: "https://gateway.example/v1",
+        payload: {
+          data: [{ id: "model", type: "provider-specific", supported_endpoints: [endpoint] }],
+        },
+      });
+
+      expect(report.models[0]).toMatchObject({
+        catalogClass: "chat",
+        missing: expect.arrayContaining(["context_window", "max_output_tokens"]),
+      });
+    },
+  );
+
+  it("keeps an unknown type without a recognized endpoint as other", () => {
+    const report = buildOmniRouteCatalogAuditReport({
+      baseUrl: "https://gateway.example/v1",
+      payload: { data: [{ id: "model", type: "provider-specific" }] },
+    });
+
+    expect(report.models[0]).toMatchObject({ catalogClass: "other", missing: [] });
+  });
+
   it("uses configured base URL unless it is the default, then permits the environment override", () => {
     expect(
       resolveOmniRouteAuditBaseUrl({

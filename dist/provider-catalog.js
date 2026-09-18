@@ -3,6 +3,7 @@ import { OMNIROUTE_DEFAULT_BASE_URL, } from "./models.js";
 import { resolveOmniRouteApiKey } from "./auth.js";
 import { redactOmniRouteBaseUrl, resolveOmniRouteBaseUrl } from "./base-url.js";
 import { assertOmniRouteOk, getOmniRouteJson, OMNIROUTE_JSON_READ_OPTIONS, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
+import { isCatalogChatEntry, isCatalogEmbeddingEntry, isCatalogImageEntry, normalizeCatalogStringArray, } from "./catalog-vocabulary.js";
 const liveCatalogCache = new Map();
 const LIVE_CATALOG_TTL_MS = 30_000;
 const LIVE_CATALOG_TIMEOUT_MS = 5_000;
@@ -35,27 +36,6 @@ function getCachedLiveCatalogValue(params) {
     }, () => deleteLiveCatalogCacheEntryIfCurrent(params.key, entry));
     return value;
 }
-const CHAT_MODEL_TYPES = new Set(["chat", "text", "llm", "language"]);
-const EMBEDDING_MODEL_TYPES = new Set(["embedding", "embeddings"]);
-const IMAGE_MODEL_TYPES = new Set(["image", "images"]);
-const NON_CHAT_MODEL_TYPES = new Set([
-    "embedding",
-    "image",
-    "rerank",
-    "audio",
-    "moderation",
-    "video",
-    "music",
-]);
-const CHAT_ENDPOINTS = new Set([
-    "chat",
-    "chat-completions",
-    "chat_completions",
-    "/v1/chat/completions",
-    "/api/v1/chat/completions",
-]);
-const EMBEDDING_ENDPOINTS = new Set(["embedding", "embeddings"]);
-const IMAGE_ENDPOINTS = new Set(["image", "images", "image-generation", "image_generation"]);
 const OMNIROUTE_CANONICAL_EFFORTS = ["none", "low", "medium", "high", "xhigh"];
 const OPENCLAW_THINKING_LEVELS = [
     "off",
@@ -96,7 +76,7 @@ function readCapabilityBoolean(entry, key) {
     return typeof value === "boolean" ? value : undefined;
 }
 function normalizeReasoningEfforts(value) {
-    const efforts = normalizeStringArray(value);
+    const efforts = normalizeCatalogStringArray(value);
     return [...new Set(efforts.filter((effort) => SUPPORTED_EFFORT_VALUES.has(effort)))];
 }
 function resolveReasoningCapabilities(entry) {
@@ -150,15 +130,6 @@ function resolveOmniRouteCatalogHttpRequest(params) {
         },
     });
 }
-function normalizeStringArray(value) {
-    if (!Array.isArray(value)) {
-        return [];
-    }
-    return value
-        .filter((item) => typeof item === "string")
-        .map((item) => item.trim().toLowerCase())
-        .filter(Boolean);
-}
 function normalizeTrimmedStringArray(value) {
     if (!Array.isArray(value)) {
         return [];
@@ -169,57 +140,15 @@ function normalizeTrimmedStringArray(value) {
         .filter(Boolean);
 }
 function normalizeInputModalities(entry) {
-    const input = normalizeStringArray(entry.input_modalities);
+    const input = normalizeCatalogStringArray(entry.input_modalities);
     const hasImageInput = input.includes("image") ||
         hasCapability(entry, "vision") ||
         hasCapability(entry, "attachment");
     return hasImageInput ? ["text", "image"] : ["text"];
 }
-function isChatModelEntry(entry) {
-    const outputModalities = normalizeStringArray(entry.output_modalities);
-    if (outputModalities.length > 0 && !outputModalities.includes("text")) {
-        return false;
-    }
-    const endpoints = normalizeStringArray(entry.supported_endpoints);
-    if (endpoints.length > 0) {
-        return endpoints.some((endpoint) => CHAT_ENDPOINTS.has(endpoint));
-    }
-    if (typeof entry.type !== "string" || entry.type.trim().length === 0) {
-        return true;
-    }
-    const type = entry.type.trim().toLowerCase();
-    if (NON_CHAT_MODEL_TYPES.has(type)) {
-        return false;
-    }
-    return CHAT_MODEL_TYPES.has(type);
-}
-function isEmbeddingModelEntry(entry) {
-    const endpoints = normalizeStringArray(entry.supported_endpoints);
-    if (endpoints.length > 0) {
-        return endpoints.some((endpoint) => EMBEDDING_ENDPOINTS.has(endpoint));
-    }
-    if (typeof entry.type !== "string" || entry.type.trim().length === 0) {
-        return false;
-    }
-    return EMBEDDING_MODEL_TYPES.has(entry.type.trim().toLowerCase());
-}
-function isImageModelEntry(entry) {
-    const outputModalities = normalizeStringArray(entry.output_modalities);
-    if (outputModalities.length > 0 && !outputModalities.includes("image")) {
-        return false;
-    }
-    const endpoints = normalizeStringArray(entry.supported_endpoints);
-    if (endpoints.length > 0) {
-        return endpoints.some((endpoint) => IMAGE_ENDPOINTS.has(endpoint));
-    }
-    if (typeof entry.type !== "string" || entry.type.trim().length === 0) {
-        return false;
-    }
-    return IMAGE_MODEL_TYPES.has(entry.type.trim().toLowerCase());
-}
 function buildOmniRouteModelFromCatalogEntry(entry) {
     const id = typeof entry.id === "string" ? entry.id.trim() : "";
-    if (!id || !isChatModelEntry(entry)) {
+    if (!id || !isCatalogChatEntry(entry)) {
         return null;
     }
     const reasoningCapabilities = resolveReasoningCapabilities(entry);
@@ -257,7 +186,7 @@ function buildOmniRouteModelFromCatalogEntry(entry) {
 }
 export function buildOmniRouteEmbeddingModelFromCatalogEntry(entry) {
     const id = typeof entry.id === "string" ? entry.id.trim() : "";
-    if (!id || !isEmbeddingModelEntry(entry)) {
+    if (!id || !isCatalogEmbeddingEntry(entry)) {
         return null;
     }
     const maxInputTokens = readPositiveNumber(entry.max_input_tokens, entry.context_length, entry.contextWindow);
@@ -273,7 +202,7 @@ export function buildOmniRouteEmbeddingModelFromCatalogEntry(entry) {
 }
 export function buildOmniRouteImageModelFromCatalogEntry(entry) {
     const id = typeof entry.id === "string" ? entry.id.trim() : "";
-    if (!id || !isImageModelEntry(entry)) {
+    if (!id || !isCatalogImageEntry(entry)) {
         return null;
     }
     return {
