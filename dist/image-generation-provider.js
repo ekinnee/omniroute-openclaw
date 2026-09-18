@@ -123,10 +123,6 @@ export function buildOmniRouteImageGenerationProvider() {
                 },
                 ssrfPolicy: req.ssrfPolicy,
             });
-            const headers = new Headers(http.headers);
-            if (!headers.has("Content-Type")) {
-                headers.set("Content-Type", "application/json");
-            }
             const requestBody = editInput
                 ? {
                     model,
@@ -145,7 +141,7 @@ export function buildOmniRouteImageGenerationProvider() {
             const operation = editInput ? "edit" : "generation";
             const request = await postOmniRouteJson({
                 url: `${http.baseUrl}/images/${editInput ? "edits" : "generations"}`,
-                headers,
+                headers: http.headers,
                 body: requestBody,
                 timeoutMs: req.timeoutMs,
                 ssrfPolicy: http.ssrfPolicy,
