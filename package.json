@@ -14,6 +14,7 @@
     "video-generation",
     "music-generation",
     "speech",
+    "web-fetch",
     "web-search"
   ],
   "type": "module",

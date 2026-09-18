@@ -586,6 +586,7 @@ describe("OmniRoute provider catalog", () => {
       registerEmbeddingProvider: vi.fn(),
       registerImageGenerationProvider: vi.fn(),
       registerWebSearchProvider: vi.fn(),
+      registerWebFetchProvider: vi.fn(),
       registerVideoGenerationProvider: vi.fn(),
       registerMusicGenerationProvider: vi.fn(),
       registerSpeechProvider: vi.fn(),

@@ -1,7 +1,7 @@
 {
   "id": "omniroute",
   "name": "OmniRoute",
-  "description": "OmniRoute multi-provider model router as a first-class OpenClaw text inference, embedding, image generation, video generation, music generation, speech, and web search provider. Routes through models from 236+ providers with automatic fallback, live model discovery, and OpenAI-compatible transport.",
+  "description": "OmniRoute multi-provider model router as a first-class OpenClaw text inference, embedding, image generation, video generation, music generation, speech, web fetch, and web search provider. Routes through models from 236+ providers with automatic fallback, live model discovery, and OpenAI-compatible transport.",
   "categories": ["models", "media", "web"],
   "activation": {
     "onStartup": false
@@ -15,7 +15,8 @@
     "speechProviders": ["omniroute"],
     "webSearchProviders": ["omniroute"],
     "videoGenerationProviders": ["omniroute"],
-    "musicGenerationProviders": ["omniroute"]
+    "musicGenerationProviders": ["omniroute"],
+    "webFetchProviders": ["omniroute"]
   },
   "providerRequest": {
     "providers": {

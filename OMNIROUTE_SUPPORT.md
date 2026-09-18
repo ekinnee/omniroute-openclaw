@@ -19,6 +19,7 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Video generation provider: `omniroute`, backed by `POST /v1/videos/generations`
 - Music generation provider: `omniroute`, backed by `POST /v1/music/generations` for prompt-only generation with inline or hosted audio materialization
 - Speech provider: `omniroute`, backed by `POST /v1/audio/speech`
+- Web fetch provider: `omniroute`, backed by `POST /v1/web/fetch` with markdown extraction and bounded response handling
 - Web search provider: `omniroute`, backed by `GET/POST /v1/search`
 - Current plugin version: `2.2.0`
 - Current catalog capability: authenticated image, video, and music model rows
@@ -42,8 +43,8 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 | `GET /api/usage/om-usage` | Provider usage snapshot (`usageProviders`) | ✅ Initial support when API-key usage visibility is enabled |
 | `POST /v1/images/edits` | Image editing | ✅ Supported with OmniRoute v3.8.11+ — one reference image with an edit-capable model; no masks or multiple references |
 | `GET/POST /v1/search` | Web search provider (`registerWebSearchProvider`) | ✅ Initial support |
-| `POST /v1/web/fetch` | Web fetch provider (`registerWebFetchProvider`) | 🔜 Planned |
 | `POST /v1/audio/speech` | Speech provider (`registerSpeechProvider`) | ✅ Initial support — explicit model, supported voice, and bounded standard output formats |
+| `POST /v1/web/fetch` | Web fetch provider (`registerWebFetchProvider`) | ✅ Initial support — public URL/extract-mode/max-character contract; provider selection, depth, selector wait, links, descriptions, and screenshots remain outside the current OpenClaw surface |
 | `POST /v1/audio/transcriptions` | Batch audio transcription (`registerMediaUnderstandingProvider`) | 🔜 Planned — not a realtime endpoint |
 | `POST /v1/videos/generations` | Video generation provider (`registerVideoGenerationProvider`) | ✅ Initial support |
 | `POST /v1/music/generations` | Music generation provider (`registerMusicGenerationProvider`) | ✅ Initial support — prompt-only generation; edits and image-conditioned modes deferred |
@@ -69,7 +70,8 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 9. ~~Add web search support~~ ✅ Done: map OpenClaw's `registerWebSearchProvider` contract to OmniRoute's `GET/POST /v1/search`, preserve auth/base URL behavior, and keep response projection inside this plugin.
 10. Add batch transcription (STT): register via `registerMediaUnderstandingProvider`, mapping to OmniRoute's multipart `POST /v1/audio/transcriptions`. Do not label or implement it as realtime transcription without a supported streaming endpoint.
 11. ~~Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.~~ ✅ Done: explicit model selection, supported OpenAI-compatible voices/formats, guarded transport, and bounded response validation.
-12. Add web fetch: register via `registerWebFetchProvider`, mapping to OmniRoute's `POST /v1/web/fetch`.
+11. ~~Add speech (TTS): register via `registerSpeechProvider`, mapping to OmniRoute's `POST /v1/audio/speech`.~~ ✅ Done: explicit model selection, supported OpenAI-compatible voices/formats, guarded transport, and bounded response validation.
+12. ~~Add web fetch~~ ✅ Done: register via `registerWebFetchProvider`, request OmniRoute markdown with metadata, project text mode through OpenClaw's public helper, preserve standard result fields, and reject blocked target hostnames before forwarding. Provider selection, depth, selector wait, links, descriptions, and screenshots remain deferred until the host contract exposes them.
 13. ~~Add video generation~~ ✅ Done: register via `registerVideoGenerationProvider`, mapping to OmniRoute's `POST /v1/videos/generations`.
 14. ~~Add music generation~~ ✅ Done: register via `registerMusicGenerationProvider`, mapping prompt-only requests to OmniRoute's `POST /v1/music/generations`; materialize inline base64 and hosted URL results with bounded, SSRF-guarded transport. Edits and image-conditioned modes remain disabled until OmniRoute exposes a uniform contract.
 
@@ -83,7 +85,8 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 ## Compatibility Notes
 
 - The asynchronous embedding-batch contract is present on OpenClaw `main` after 2026.9.4 and is not part of the current stable compatibility matrix. Do not import it or raise the plugin's OpenClaw floor until the first containing stable release is identified and packed-artifact compatibility is proven.
-- Plugin-owned guarded requests reject target `request.tls` overrides combined with `request.proxy.mode: "explicit-proxy"`, rather than silently dropping them. The guarded explicit-proxy policy in both OpenClaw 2026.7.1 and 2026.9.3 lacks an independent target TLS field; full support needs a public SDK contract. Direct and environment-proxy target TLS behavior is unchanged. This limitation applies to discovery, catalog audit, embeddings, image/video/music generation, speech, and web search, not the separately owned chat or usage transports.
+- Plugin-owned guarded requests reject target `request.tls` overrides combined with `request.proxy.mode: "explicit-proxy"`, rather than silently dropping them. The guarded explicit-proxy policy in both OpenClaw 2026.7.1 and 2026.9.3 lacks an independent target TLS field; full support needs a public SDK contract. Direct and environment-proxy target TLS behavior is unchanged. This limitation applies to discovery, catalog audit, embeddings, image/video/music generation, speech, web fetch, and web search, not the separately owned chat or usage transports.
+- Web fetch is bounded by the plugin's guarded transport and rejects private, loopback, and other special-use target hostnames before forwarding. OpenClaw 2026.7.1 owns `maxChars` normalization and preserves only the standard text, final URL, content type, status, title, extractor, and truncation fields; OmniRoute's provider, depth, selector-wait, link, description, and screenshot fields therefore remain intentionally unprojected.
 - OmniRoute accepts standard bearer API keys and also URL token compatibility modes, but this plugin should prefer bearer auth through OpenClaw's provider credential handling.
 - `auto` is not special to this plugin. It is available only when the authenticated OmniRoute catalog advertises it, just like every other model or combo.
 - Embeddings deliberately do not default to `auto`. The selected model and requested dimensionality are part of vector index identity; routing an embedding request to a model with different dimensions can invalidate existing indexes or fail at query time.

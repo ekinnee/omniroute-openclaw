@@ -72,6 +72,7 @@ function assertPluginManifest(packageRoot) {
     "speechProviders",
     "videoGenerationProviders",
     "musicGenerationProviders",
+    "webFetchProviders",
     "webSearchProviders",
   ]) {
     assertArrayIncludes(manifest.contracts?.[contract], providerId, `manifest ${contract}`);
@@ -158,6 +159,7 @@ async function runInstalledArtifact() {
     speech: 0,
     video: 0,
     music: 0,
+    webFetch: 0,
     webSearch: 0,
   };
   const registrations = {
@@ -168,6 +170,7 @@ async function runInstalledArtifact() {
     speech: [],
     video: [],
     music: [],
+    webFetch: [],
     webSearch: [],
   };
 
@@ -199,6 +202,10 @@ async function runInstalledArtifact() {
     registerMusicGenerationProvider: (provider) => {
       registered.music++;
       registrations.music.push(provider);
+    },
+    registerWebFetchProvider: (provider) => {
+      registered.webFetch++;
+      registrations.webFetch.push(provider);
     },
     registerWebSearchProvider: (provider) => {
       registered.webSearch++;
