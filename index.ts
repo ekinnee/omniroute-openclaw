@@ -22,6 +22,7 @@ import { createOmniRouteWebFetchProvider } from "./web-fetch-provider.js";
 import { buildOmniRouteVideoGenerationProvider } from "./video-generation-provider.js";
 import { buildOmniRouteMusicGenerationProvider } from "./music-generation-provider.js";
 import { buildOmniRouteSpeechProvider } from "./speech-provider.js";
+import { omniRouteMediaUnderstandingProvider } from "./audio-transcription-provider.js";
 import {
   buildOmniRouteReplayPolicy,
   buildOmniRouteThinkingProfile,
@@ -88,6 +89,7 @@ const plugin: OpenClawPluginDefinition = definePluginEntry({
     api.registerVideoGenerationProvider(buildOmniRouteVideoGenerationProvider());
     api.registerMusicGenerationProvider(buildOmniRouteMusicGenerationProvider());
     api.registerSpeechProvider(buildOmniRouteSpeechProvider());
+    api.registerMediaUnderstandingProvider(omniRouteMediaUnderstandingProvider);
   },
 });
 

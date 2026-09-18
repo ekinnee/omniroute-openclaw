@@ -590,6 +590,7 @@ describe("OmniRoute provider catalog", () => {
       registerVideoGenerationProvider: vi.fn(),
       registerMusicGenerationProvider: vi.fn(),
       registerSpeechProvider: vi.fn(),
+      registerMediaUnderstandingProvider: vi.fn(),
     } as never);
     const resolveThinkingProfile = registerProvider.mock.calls[0]?.[0].resolveThinkingProfile;
     expect(resolveThinkingProfile).toBeTypeOf("function");
