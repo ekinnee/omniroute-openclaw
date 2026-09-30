@@ -22,7 +22,7 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Web fetch provider: `omniroute`, backed by `POST /v1/web/fetch` with markdown extraction and bounded response handling
 - Batch audio transcription provider: `omniroute`, backed by multipart `POST /v1/audio/transcriptions`; batch REST only, not realtime
 - Web search provider: `omniroute`, backed by `GET/POST /v1/search`
-- Current plugin version: `2.2.0`
+- Current plugin version: `2.3.0`
 - Current catalog capability: authenticated image, video, and music model rows
 
 The text provider uses OmniRoute's authenticated live model catalog and filters the response to chat-capable rows. The same authenticated response now publishes image, video, and music rows through `registerModelCatalogProvider`. `GET /v1/models` is authoritative: preserve its IDs and advertised capability objects exactly, do not hardcode `auto` or any other combo/default, and do not synthesize a static fallback when discovery is unavailable. Classification uses explicit type, endpoint, and output-modality metadata rather than model names. Chat rows lacking positive context and output limits are excluded from discovery until OmniRoute advertises both. No guessed windows such as 128k/16k are substituted. The catalog can differ by gateway upstream-provider configuration and API-key permissions. Audio/voice rows remain deferred until metadata supports reliable classification and an owning OpenClaw audio provider contract exists.

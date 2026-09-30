@@ -7,10 +7,30 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-09-30
+
+### Added
+
+- Added authenticated image, video, and music model catalogs derived from one
+  credential- and request-policy-scoped `GET /v1/models` response.
+- Added prompt-only music generation through `POST /v1/music/generations`.
+- Added text-to-speech through `POST /v1/audio/speech` with explicit model
+  selection and MP3, Opus, and WAV response validation.
+- Added web fetch through `POST /v1/web/fetch` using OpenClaw's public
+  web-fetch contract and host-owned result normalization.
+- Added batch audio transcription through `POST /v1/audio/transcriptions`.
+- Added a packaged changelog covering the plugin's published history.
+
 ### Changed
 
 - Replaced the unsupported top-level manifest `tags` field with package
   keywords and controlled ClawHub categories (`models`, `media`, and `web`).
+- Centralized JSON request content-type defaults in the shared transport owner.
+
+### Fixed
+
+- Aligned catalog-audit classification with runtime discovery for canonical
+  chat endpoint aliases and unknown model types.
 
 ## [2.2.0] - 2026-09-17
 
@@ -186,7 +206,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Added environment and onboarding-based API-key configuration.
 - Added custom gateway configuration and the initial `omniroute/auto` model.
 
-[Unreleased]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.2.0...HEAD
+[Unreleased]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.0...HEAD
+[2.3.0]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.1.4...v2.2.0
 [2.1.4]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.1.3...v2.1.4
 [2.1.3]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.1.2...v2.1.3
