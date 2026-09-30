@@ -7,6 +7,16 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-09-30
+
+### Fixed
+
+- Declared `models` as the single ClawHub taxonomy category required for plugin
+  publication while retaining media and web discovery terms in package
+  keywords.
+- Superseded the v2.3.0 registry publication, which ClawHub rejected before
+  mutation because its manifest declared multiple categories.
+
 ## [2.3.0] - 2026-09-30
 
 ### Added
@@ -206,7 +216,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Added environment and onboarding-based API-key configuration.
 - Added custom gateway configuration and the initial `omniroute/auto` model.
 
-[Unreleased]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.0...HEAD
+[Unreleased]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.1...HEAD
+[2.3.1]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.1.4...v2.2.0
 [2.1.4]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.1.3...v2.1.4

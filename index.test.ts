@@ -129,7 +129,7 @@ describe("omniroute plugin entry and integration", () => {
     );
     expect(manifest.id).toBe("omniroute");
     expect(manifest).not.toHaveProperty("tags");
-    expect(manifest.categories).toEqual(["models", "media", "web"]);
+    expect(manifest.categories).toEqual(["models"]);
     expect(manifest.providers).toContain("omniroute");
     expect(manifest.contracts.embeddingProviders).toEqual(["omniroute"]);
     expect(manifest.contracts.imageGenerationProviders).toEqual(["omniroute"]);
