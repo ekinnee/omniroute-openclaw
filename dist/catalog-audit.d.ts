@@ -1,4 +1,4 @@
-import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/runtime-config-snapshot";
 declare const ADVERTISED_MODEL_FIELDS: readonly ["type", "supported_endpoints", "input_modalities", "output_modalities", "context_length", "max_input_tokens", "contextWindow", "max_output_tokens", "maxOutputTokens", "dimensions", "embedding_dimensions", "output_dimensions", "supported_sizes"];
 declare const ADVERTISED_CAPABILITY_FIELDS: readonly ["reasoning", "supportsThinking", "thinking", "effort_tiers", "tool_calling", "vision", "attachment"];
 export type OmniRouteCatalogAuditModel = {

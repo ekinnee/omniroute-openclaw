@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { getRuntimeConfig } from "openclaw/plugin-sdk/runtime-config-snapshot";
 import {
   auditOmniRouteCatalog,
   buildOmniRouteCatalogAuditReport,
@@ -11,9 +12,14 @@ import {
   runOmniRouteCatalogAuditCli,
 } from "./catalog-audit-cli.js";
 
+vi.mock("openclaw/plugin-sdk/runtime-config-snapshot", () => ({
+  getRuntimeConfig: vi.fn(),
+}));
+
 describe("OmniRoute catalog audit", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    vi.mocked(getRuntimeConfig).mockReset();
     vi.unstubAllEnvs();
   });
 
@@ -201,6 +207,48 @@ describe("OmniRoute catalog audit", () => {
     });
 
     expect(JSON.parse(writes.join(""))).toEqual(report);
+    expect(getRuntimeConfig).not.toHaveBeenCalled();
+  });
+
+  it("does not read configuration or audit for help or invalid arguments", async () => {
+    const writes: string[] = [];
+    const loadAudit = vi.fn();
+    const options = { stdout: { write: (value: string) => writes.push(value) }, loadAudit };
+    await runOmniRouteCatalogAuditCli(["--help"], options);
+    expect(writes.join("")).toContain("Usage: omniroute-catalog-audit");
+    await expect(runOmniRouteCatalogAuditCli(["--unknown"], options)).rejects.toThrow(
+      "Unknown catalog audit option",
+    );
+    expect(getRuntimeConfig).not.toHaveBeenCalled();
+    expect(loadAudit).not.toHaveBeenCalled();
+  });
+
+  it.each([undefined, "research"])("forwards SDK config and the selected agent (%s)", async (agent) => {
+    const config = {
+      agents: { list: [
+        { id: "primary", default: true, agentDir: "/tmp/audit-primary" },
+        { id: "research", agentDir: "/tmp/audit-research" },
+      ] },
+    };
+    vi.mocked(getRuntimeConfig).mockReturnValue(config);
+    const env = { OMNIROUTE_API_KEY: "fixture-key" };
+    const report = buildOmniRouteCatalogAuditReport({ baseUrl: "https://fixture.example/v1", payload: { data: [] } });
+    const loadAudit = vi.fn(async () => report);
+    await runOmniRouteCatalogAuditCli(agent ? ["--agent", agent] : [], {
+      env, loadAudit, stdout: { write: () => {} },
+    });
+    expect(getRuntimeConfig).toHaveBeenCalledExactlyOnceWith();
+    expect(loadAudit).toHaveBeenCalledExactlyOnceWith({
+      config, env, agentDir: agent ? "/tmp/audit-research" : "/tmp/audit-primary",
+    });
+  });
+
+  it("propagates a config reader error without starting an audit", async () => {
+    const error = new Error("fixture config failure");
+    vi.mocked(getRuntimeConfig).mockImplementation(() => { throw error; });
+    const loadAudit = vi.fn();
+    await expect(runOmniRouteCatalogAuditCli([], { loadAudit })).rejects.toBe(error);
+    expect(loadAudit).not.toHaveBeenCalled();
   });
 
   it("rejects unsupported options before making an audit request", () => {

@@ -1,5 +1,5 @@
 import { resolveOmniRouteApiKey } from "./auth.js";
-import type { OpenClawConfig } from "openclaw/plugin-sdk/config-runtime";
+import type { OpenClawConfig } from "openclaw/plugin-sdk/runtime-config-snapshot";
 import {
   assertOmniRouteOk,
   getOmniRouteJson,

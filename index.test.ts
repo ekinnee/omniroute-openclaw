@@ -9,7 +9,7 @@ const MIN_OPENCLAW_VERSION = "2026.7.1";
 const OPENCLAW_PEER_RANGE = `>=${MIN_OPENCLAW_VERSION}-0`;
 const REQUIRED_OPENCLAW_SDK_EXPORTS = [
   "./plugin-sdk/agent-runtime",
-  "./plugin-sdk/config-runtime",
+  "./plugin-sdk/runtime-config-snapshot",
   "./plugin-sdk/plugin-entry",
   "./plugin-sdk/provider-auth",
   "./plugin-sdk/secret-input-runtime",
@@ -102,7 +102,8 @@ describe("omniroute plugin entry and integration", () => {
       "auth.ts",
       "http.ts",
     ];
-    const privateSubpaths = [
+    const unsupportedSubpaths = [
+      "config-runtime",
       "embedding-providers",
       "image-generation",
       "provider-auth-runtime",
@@ -118,7 +119,7 @@ describe("omniroute plugin entry and integration", () => {
     const source = runtimeFiles
       .map((file) => readFileSync(resolve(__dirname, file), "utf8"))
       .join("\n");
-    for (const privateSubpath of privateSubpaths) {
+    for (const privateSubpath of unsupportedSubpaths) {
       expect(source).not.toContain(`openclaw/plugin-sdk/${privateSubpath}`);
     }
   });

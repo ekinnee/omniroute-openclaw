@@ -4,7 +4,7 @@ import {
   type OmniRouteCatalogAuditReport,
 } from "./catalog-audit.js";
 import { resolveAgentDir, resolveDefaultAgentDir } from "openclaw/plugin-sdk/agent-runtime";
-import { loadConfig } from "openclaw/plugin-sdk/config-runtime";
+import { getRuntimeConfig } from "openclaw/plugin-sdk/runtime-config-snapshot";
 
 type Writable = { write: (text: string) => unknown };
 
@@ -73,7 +73,7 @@ export async function runOmniRouteCatalogAuditCli(
     (options.stdout ?? process.stdout).write(`${OMNIROUTE_CATALOG_AUDIT_USAGE}\n`);
     return;
   }
-  const config = options.config ?? loadConfig();
+  const config = options.config ?? getRuntimeConfig();
   const env = options.env ?? process.env;
   const agentDir = options.agentDir ?? (
     parsed.agentId

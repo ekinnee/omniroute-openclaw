@@ -6,7 +6,7 @@ Use [README.md](README.md) for installation and user-facing configuration. This 
 
 ## Fast setup
 
-- Use Node.js 24.x. CI currently uses Node 24.15.0.
+- Use Node.js 24.x. CI currently uses Node 24.16.0.
 - Use the package-manager version declared in `package.json` (currently pnpm 9.15.4).
 - Install dependencies with:
 
