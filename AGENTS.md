@@ -53,6 +53,21 @@ git diff --check
 
 The repository has no `pnpm lint` script. CI installs with a frozen lockfile, builds the project, rejects stale `dist/`, and runs the test suite.
 
+When running the suite from an OpenClaw/agent environment, inherited runtime
+selectors (`OMNIROUTE_API_KEY`, `OMNIROUTE_BASE_URL`, `OPENCLAW_CONFIG_PATH`,
+`OPENCLAW_STATE_DIR`) can leak into tests and produce unrelated auth, base-URL, or
+`beforeAll` hook-timeout failures. Validate deterministically by clearing them and
+serializing workers:
+
+```bash
+env -u OMNIROUTE_API_KEY -u OMNIROUTE_BASE_URL -u OPENCLAW_CONFIG_PATH -u OPENCLAW_STATE_DIR \
+  corepack pnpm exec vitest run --maxWorkers=1
+```
+
+`corepack pnpm test --maxWorkers=1` is not a substitute: pnpm forwards the unknown
+flag to the script and fails. These environment-induced failures are not product
+regressions; report results from the sanitized run.
+
 For documentation-only changes, still run `git diff --check`. For this pair of instruction files, also verify the link rather than copying content:
 
 ```bash
@@ -65,7 +80,13 @@ test "$(readlink CLAUDE.md)" = "AGENTS.md"
 
 Follow the pull-request template. State the user-visible effect, list the checks actually run, and explain any manifest or capability ownership change. Do not include credentials, private endpoints, or production-only data.
 
-Version changes, tags, GitHub Releases, and ClawHub publication are maintainer work. The normal publication path is a published GitHub release whose tag is `v<package version>`; contributors should not manually publish.
+Version changes, tags, GitHub Releases, and ClawHub publication are maintainer work. The normal publication path is a published GitHub release whose tag is `v<package version>`; contributors should not manually publish. Publishing a GitHub Release triggers the ClawHub workflow, which finishes at a protected `clawhub-production` environment that requires owner approval; approval alone does not guarantee a runner, so verify publication from the workflow/registry rather than assuming it.
+
+A release updates every release-owned file together: `package.json` (version),
+`README.md` (current-release line and GitHub Release link), `CHANGELOG.md` (dated
+section and compare links), `OMNIROUTE_SUPPORT.md` (current plugin version), and a
+versioned record at `docs/releases/v<version>/release-notes.md`. Do not land a
+release without the versioned release note; add it in a follow-up if it was missed.
 
 ## Instruction-file convention
 
