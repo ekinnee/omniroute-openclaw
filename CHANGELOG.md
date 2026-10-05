@@ -7,6 +7,16 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [2.3.2] - 2026-10-05
+
+### Fixed
+
+- Updated catalog audit to use the public
+  `openclaw/plugin-sdk/runtime-config-snapshot` SDK's `getRuntimeConfig`,
+  restoring catalog-audit CLI loading on OpenClaw beta ([PR #83](https://github.com/ekinnee/omniroute-openclaw/pull/83)).
+- Added regression coverage and a compatibility fixture verifying actual
+  runtime configuration and default/named agent selection.
+
 ## [2.3.1] - 2026-09-30
 
 ### Fixed
@@ -216,7 +226,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Added environment and onboarding-based API-key configuration.
 - Added custom gateway configuration and the initial `omniroute/auto` model.
 
-[Unreleased]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.1...HEAD
+[Unreleased]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.2...HEAD
+[2.3.2]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.1.4...v2.2.0
