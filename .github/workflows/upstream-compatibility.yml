@@ -36,18 +36,21 @@ jobs:
           - label: floor
             spec: 2026.7.1
             peerResolution: strict
+            agentSchema: list
           - label: latest
             spec: latest
             peerResolution: strict
+            agentSchema: entries
           - label: beta
             spec: beta
             peerResolution: legacy
+            agentSchema: entries
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: 24.15.0
+          node-version: 24.16.0
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Verify package metadata against the lockfile
@@ -81,6 +84,7 @@ jobs:
           TARGET_ROLE: ${{ matrix.label }}
           OPENCLAW_SPEC: ${{ matrix.spec }}
           PEER_RESOLUTION: ${{ matrix.peerResolution }}
+          AGENT_SCHEMA: ${{ matrix.agentSchema }}
           EXPECTED_OPENCLAW_VERSION: ${{ steps.openclaw.outputs.expected_version }}
           PACKAGE_DIR: ${{ steps.pack.outputs.package_dir }}
           PACKAGE_FILENAME: ${{ steps.pack.outputs.package_filename }}
@@ -106,6 +110,7 @@ jobs:
           # separately proves normal OpenClaw host installation.
           npm install --cache /tmp/omniroute-openclaw-npm-cache --ignore-scripts "${peer_flags[@]}" --no-save "openclaw@${EXPECTED_OPENCLAW_VERSION}" "$package_path"
           ./node_modules/.bin/omniroute-catalog-audit --help | grep -F "Usage: omniroute-catalog-audit"
+          node "$GITHUB_WORKSPACE/.github/scripts/catalog-audit-config-fixture.mjs" "$AGENT_SCHEMA"
           export OPENCLAW_EXPECTED_VERSION="$EXPECTED_OPENCLAW_VERSION"
           export OPENCLAW_BUILD_VERSION="2026.7.1"
           probe_output="$(node "$GITHUB_WORKSPACE/.github/scripts/upstream-compatibility-probe.mjs" --installed-artifact)"
