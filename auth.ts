@@ -3,11 +3,7 @@ import {
   resolveApiKeyForProvider,
   type AuthProfileStore,
 } from "openclaw/plugin-sdk/agent-runtime";
-import {
-  hasConfiguredSecretInput,
-  isProviderAuthProfileConfigured,
-  resolveEnvApiKey,
-} from "openclaw/plugin-sdk/provider-auth";
+import * as providerAuth from "openclaw/plugin-sdk/provider-auth";
 import {
   OMNIROUTE_API_KEY_ENV_VAR,
   OMNIROUTE_PROVIDER_ID,
@@ -19,19 +15,40 @@ function readConfiguredProviderCredential(cfg: unknown): unknown {
   return provider?.apiKey;
 }
 
-export function isOmniRouteConfigured(params: {
+type ConfiguredParams = {
   cfg?: unknown;
   agentDir?: string;
-}): boolean {
+};
+
+// Optional public exports let the same artifact load on the supported SDK floor.
+const authSdk: typeof providerAuth & {
+  isProviderAuthProfileConfiguredAsync?: (
+    params: Parameters<typeof providerAuth.isProviderAuthProfileConfigured>[0],
+  ) => Promise<boolean>;
+} = providerAuth;
+
+function hasDirectCredential(cfg: unknown): boolean {
   return Boolean(
-    hasConfiguredSecretInput(readConfiguredProviderCredential(params.cfg)) ||
-      resolveEnvApiKey(OMNIROUTE_PROVIDER_ID)?.apiKey ||
-      process.env[OMNIROUTE_API_KEY_ENV_VAR] ||
-      isProviderAuthProfileConfigured({
-        provider: OMNIROUTE_PROVIDER_ID,
-        agentDir: params.agentDir,
-      }),
+    providerAuth.hasConfiguredSecretInput(readConfiguredProviderCredential(cfg)) ||
+      providerAuth.resolveEnvApiKey(OMNIROUTE_PROVIDER_ID)?.apiKey ||
+      process.env[OMNIROUTE_API_KEY_ENV_VAR],
   );
+}
+
+export function isOmniRouteConfigured(params: ConfiguredParams): boolean {
+  return hasDirectCredential(params.cfg) ||
+    providerAuth.isProviderAuthProfileConfigured({
+      provider: OMNIROUTE_PROVIDER_ID,
+      agentDir: params.agentDir,
+    });
+}
+
+export async function isOmniRouteConfiguredAsync(params: ConfiguredParams): Promise<boolean> {
+  if (hasDirectCredential(params.cfg)) return true;
+  // Only an absent capability selects the old path; async failures stay visible.
+  const checkProfile = authSdk.isProviderAuthProfileConfiguredAsync
+    ?? providerAuth.isProviderAuthProfileConfigured;
+  return await checkProfile({ provider: OMNIROUTE_PROVIDER_ID, agentDir: params.agentDir });
 }
 
 export async function resolveOmniRouteApiKey(params: {

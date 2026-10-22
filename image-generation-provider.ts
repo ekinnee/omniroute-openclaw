@@ -2,6 +2,7 @@
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import {
   isOmniRouteConfigured,
+  isOmniRouteConfiguredAsync,
   resolveOmniRouteApiKey,
 } from "./auth.js";
 import {
@@ -18,7 +19,9 @@ import {
 } from "./models.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
 
-type ImageGenerationProvider = Parameters<OpenClawPluginApi["registerImageGenerationProvider"]>[0];
+type ImageGenerationProvider = Parameters<OpenClawPluginApi["registerImageGenerationProvider"]>[0] & {
+  isConfiguredAsync: typeof isOmniRouteConfiguredAsync;
+};
 type ImageGenerationRequest = Parameters<ImageGenerationProvider["generateImage"]>[0];
 type ImageGenerationResult = Awaited<ReturnType<ImageGenerationProvider["generateImage"]>>;
 type GeneratedImageAsset = ImageGenerationResult["images"][number];
@@ -120,6 +123,7 @@ export function buildOmniRouteImageGenerationProvider(): ImageGenerationProvider
     id: OMNIROUTE_PROVIDER_ID,
     label: OMNIROUTE_LABEL,
     isConfigured: ({ cfg, agentDir }) => isOmniRouteConfigured({ cfg, agentDir }),
+    isConfiguredAsync: isOmniRouteConfiguredAsync,
     capabilities: {
       generate: {
         maxCount: MAX_IMAGE_COUNT,

@@ -14,6 +14,7 @@ import {
 
 vi.mock("openclaw/plugin-sdk/runtime-config-snapshot", () => ({
   getRuntimeConfig: vi.fn(),
+  captureRuntimeConfigAsyncReader: undefined,
 }));
 
 describe("OmniRoute catalog audit", () => {

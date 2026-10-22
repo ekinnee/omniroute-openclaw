@@ -1,6 +1,6 @@
 // OmniRoute video generation provider using public SDK registration contracts.
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
-import { isOmniRouteConfigured, resolveOmniRouteApiKey } from "./auth.js";
+import { isOmniRouteConfigured, isOmniRouteConfiguredAsync, resolveOmniRouteApiKey } from "./auth.js";
 import {
   assertOmniRouteOk,
   OMNIROUTE_JSON_READ_OPTIONS,
@@ -15,7 +15,9 @@ import {
 } from "./models.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
 
-type VideoGenerationProvider = Parameters<OpenClawPluginApi["registerVideoGenerationProvider"]>[0];
+type VideoGenerationProvider = Parameters<OpenClawPluginApi["registerVideoGenerationProvider"]>[0] & {
+  isConfiguredAsync: typeof isOmniRouteConfiguredAsync;
+};
 type VideoGenerationRequest = Parameters<VideoGenerationProvider["generateVideo"]>[0];
 type VideoGenerationResult = Awaited<ReturnType<VideoGenerationProvider["generateVideo"]>>;
 type GeneratedVideoAsset = VideoGenerationResult["videos"][number];
@@ -114,6 +116,7 @@ export function buildOmniRouteVideoGenerationProvider(): VideoGenerationProvider
       },
     },
     isConfigured: ({ cfg, agentDir }) => isOmniRouteConfigured({ cfg, agentDir }),
+    isConfiguredAsync: isOmniRouteConfiguredAsync,
     async generateVideo(req) {
       const model = requireVideoModel(req.model);
       const apiKey = await resolveOmniRouteApiKey({

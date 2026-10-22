@@ -1,5 +1,5 @@
 import { normalizeResolvedSecretInputString } from "openclaw/plugin-sdk/secret-input-runtime";
-import { isOmniRouteConfigured, resolveOmniRouteApiKey } from "./auth.js";
+import { isOmniRouteConfigured, isOmniRouteConfiguredAsync, resolveOmniRouteApiKey } from "./auth.js";
 import { assertOmniRouteOk, OMNIROUTE_JSON_READ_OPTIONS, postOmniRouteJson, readOmniRouteBytes, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
 import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
@@ -141,6 +141,11 @@ export function buildOmniRouteSpeechProvider() {
             const configuredSpeech = normalizeSpeechProviderConfig(providerConfig);
             return Boolean(readString(configuredSpeech.model, configuredSpeech.modelId) &&
                 (readString(configuredSpeech.apiKey) || isOmniRouteConfigured({ cfg })));
+        },
+        isConfiguredAsync: async ({ cfg, providerConfig }) => {
+            const configuredSpeech = normalizeSpeechProviderConfig(providerConfig);
+            return Boolean(readString(configuredSpeech.model, configuredSpeech.modelId) &&
+                (readString(configuredSpeech.apiKey) || await isOmniRouteConfiguredAsync({ cfg })));
         },
         async synthesize(req) {
             if (!req.text.trim()) {

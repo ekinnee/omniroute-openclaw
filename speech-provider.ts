@@ -1,7 +1,7 @@
 // OmniRoute speech provider using the public OpenClaw speech contract.
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 import { normalizeResolvedSecretInputString } from "openclaw/plugin-sdk/secret-input-runtime";
-import { isOmniRouteConfigured, resolveOmniRouteApiKey } from "./auth.js";
+import { isOmniRouteConfigured, isOmniRouteConfiguredAsync, resolveOmniRouteApiKey } from "./auth.js";
 import {
   assertOmniRouteOk,
   OMNIROUTE_JSON_READ_OPTIONS,
@@ -17,6 +17,9 @@ import {
 } from "./models.js";
 
 type SpeechProvider = Parameters<OpenClawPluginApi["registerSpeechProvider"]>[0];
+type AsyncSpeechProvider = SpeechProvider & {
+  isConfiguredAsync: (ctx: Parameters<SpeechProvider["isConfigured"]>[0]) => Promise<boolean>;
+};
 type SpeechRequest = Parameters<SpeechProvider["synthesize"]>[0];
 
 const DEFAULT_SPEECH_TIMEOUT_MS = 120_000;
@@ -174,7 +177,7 @@ function fileExtension(format: SpeechResponseFormat): string {
   return `.${format}`;
 }
 
-export function buildOmniRouteSpeechProvider(): SpeechProvider {
+export function buildOmniRouteSpeechProvider(): AsyncSpeechProvider {
   return {
     id: OMNIROUTE_PROVIDER_ID,
     label: OMNIROUTE_LABEL,
@@ -195,6 +198,13 @@ export function buildOmniRouteSpeechProvider(): SpeechProvider {
       return Boolean(
         readString(configuredSpeech.model, configuredSpeech.modelId) &&
           (readString(configuredSpeech.apiKey) || isOmniRouteConfigured({ cfg })),
+      );
+    },
+    isConfiguredAsync: async ({ cfg, providerConfig }) => {
+      const configuredSpeech = normalizeSpeechProviderConfig(providerConfig);
+      return Boolean(
+        readString(configuredSpeech.model, configuredSpeech.modelId) &&
+          (readString(configuredSpeech.apiKey) || await isOmniRouteConfiguredAsync({ cfg })),
       );
     },
     async synthesize(req) {

@@ -1,6 +1,7 @@
 import { createRequire } from "node:module";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
+import { tmpdir } from "node:os";
 
 const EXPECTED_COMPATIBILITY_FLOOR = "2026.7.1";
 const EXPECTED_PEER_RANGE = `>=${EXPECTED_COMPATIBILITY_FLOOR}-0`;
@@ -129,6 +130,15 @@ function runSourceContract() {
 }
 
 async function runInstalledArtifact() {
+  // Set selectors before importing the SDK; never inspect the runner's real auth.
+  const fixtureRoot = mkdtempSync(join(tmpdir(), "omniroute-readiness-"));
+  process.once("exit", () => rmSync(fixtureRoot, { recursive: true, force: true }));
+  process.env.OPENCLAW_STATE_DIR = fixtureRoot;
+  process.env.OPENCLAW_CONFIG_PATH = join(fixtureRoot, "openclaw.json");
+  delete process.env.OMNIROUTE_API_KEY;
+  delete process.env.OMNIROUTE_BASE_URL;
+  const warnings = [];
+  process.on("warning", (warning) => warnings.push(warning));
   const projectRoot = resolve(process.cwd());
   const requireFromProject = createRequire(resolve(projectRoot, "package.json"));
   const pluginPackagePath = requireFromProject.resolve(`${PLUGIN_PACKAGE_NAME}/package.json`);
@@ -242,6 +252,33 @@ async function runInstalledArtifact() {
     fail("OmniRoute provider does not expose catalog.run");
   }
 
+  const readiness = {};
+  for (const capability of ["image", "video", "music", "speech"]) {
+    const provider = registrations[capability][0];
+    const context = {
+      cfg: {}, agentDir: join(fixtureRoot, "agent"),
+      providerConfig: { model: "fixture/model" },
+    };
+    assertEqual(typeof provider.isConfiguredAsync, "function", `${capability} async hook`);
+    assertEqual(await provider.isConfiguredAsync(context), false, `${capability} absent auth`);
+    const configuredContext = {
+      ...context,
+      cfg: { models: { providers: { omniroute: { apiKey: "fixture-key" } } } },
+    };
+    assertEqual(await provider.isConfiguredAsync(configuredContext), true, `${capability} configured auth`);
+    assertEqual(provider.isConfigured(configuredContext), true, `${capability} legacy boolean`);
+    readiness[capability] = { absent: false, configured: true, legacy: true };
+  }
+  // Node delivers emitWarning asynchronously. Async readiness must avoid the
+  // deprecated provider/auth paths on hosts that supply the replacements.
+  await new Promise((resolve) => setImmediate(resolve));
+  const authSdk = await import(requireFromProject.resolve("openclaw/plugin-sdk/provider-auth"));
+  if (typeof authSdk.isProviderAuthProfileConfiguredAsync === "function") {
+    assertEqual(warnings.filter((warning) =>
+      ["DEP_PLUGIN_SDK", "DEP_SESSION_PERSISTENCE"].includes(warning.code),
+    ).length, 0, "async readiness deprecation warnings");
+  }
+
   console.log(
     JSON.stringify({
       mode: "installed-artifact",
@@ -256,6 +293,7 @@ async function runInstalledArtifact() {
       ),
       providerId: registrations.provider[0].id,
       catalogRun: true,
+      readiness,
     }),
   );
 }
