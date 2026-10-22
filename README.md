@@ -2,8 +2,8 @@
 
 Registers [OmniRoute](https://github.com/diegosouzapw/OmniRoute) — a multi-provider model routing proxy — as a first-class text inference, embedding, image generation, video generation, music generation, speech, batch audio transcription, web fetch, and web search provider in [OpenClaw](https://github.com/openclaw/openclaw). Install the plugin from [ClawHub](https://clawhub.ai/ekinnee/plugins/omniroute-provider). Routes through models from 236+ providers with automatic fallback, live model discovery, and OpenAI-compatible transport.
 
-Current release: `2.3.2`. See the [changelog](CHANGELOG.md) for version history
-and the [GitHub Release](https://github.com/ekinnee/omniroute-openclaw/releases/tag/v2.3.2)
+Current release: `2.4.0`. See the [changelog](CHANGELOG.md) for version history
+and the [GitHub Release](https://github.com/ekinnee/omniroute-openclaw/releases/tag/v2.4.0)
 for the compatibility contract and verification record.
 
 The supported OpenClaw floor remains `2026.7.1`. On hosts that expose the async

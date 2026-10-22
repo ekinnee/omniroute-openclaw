@@ -7,6 +7,25 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [2.4.0] - 2026-10-22
+
+### Added
+
+- Honor `tools.web.search.maxResults` when a web-search call omits `count`,
+  and show the effective default in the tool parameter description. Explicit
+  counts retain their existing behavior; the unset default remains `5`
+  ([PR #90](https://github.com/ekinnee/omniroute-openclaw/pull/90), requested by
+  [sprintberlin](https://github.com/sprintberlin)).
+
+### Fixed
+
+- Prefer async public SDK auth checks for image, video, music, and speech
+  readiness on newer OpenClaw hosts, avoiding the legacy speech-readiness
+  deprecation warning on that path. Prepare standalone catalog-audit config
+  asynchronously when the SDK supports it. Older hosts retain their supported
+  synchronous paths without retrying failed async operations
+  ([PR #89](https://github.com/ekinnee/omniroute-openclaw/pull/89)).
+
 ## [2.3.2] - 2026-10-05
 
 ### Fixed
@@ -226,7 +245,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Added environment and onboarding-based API-key configuration.
 - Added custom gateway configuration and the initial `omniroute/auto` model.
 
-[Unreleased]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.2...HEAD
+[Unreleased]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.4.0...HEAD
+[2.4.0]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.2...v2.4.0
 [2.3.2]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.2.0...v2.3.0
