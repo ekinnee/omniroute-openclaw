@@ -138,6 +138,7 @@ The plugin registers itself as a web search provider automatically — no additi
     web: {
       search: {
         provider: "omniroute",
+        maxResults: 10,
       },
     },
   },
@@ -145,6 +146,11 @@ The plugin registers itself as a web search provider automatically — no additi
 ```
 
 The web search tool supports `query`, `count` (1-10), `freshness` (day/week/month/year), `country`, and `language` parameters. Results include titles, URLs, snippets, and publication dates when OmniRoute supplies them.
+
+Set `tools.web.search.maxResults` to choose the default result count (1-10).
+When a call omits `count`, the plugin uses this setting, or `5` if it is unset.
+An explicit `count` keeps its existing handling and takes precedence. The tool's
+parameter description shows the effective default.
 
 ### Web Fetch
 
