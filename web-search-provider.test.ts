@@ -74,6 +74,46 @@ describe("OmniRoute web search provider", () => {
     expect(provider.getConfiguredCredentialValue?.(explicitSearchConfig as never)).toBeUndefined();
   });
 
+  it.each([
+    { label: "no setting", maxResults: undefined, count: undefined, expected: 5, defaultCount: 5 },
+    { label: "configured default", maxResults: 10, count: undefined, expected: 10, defaultCount: 10 },
+    { label: "explicit override", maxResults: 10, count: 3, expected: 3, defaultCount: 10 },
+    { label: "explicit zero", maxResults: 10, count: 0, expected: 5, defaultCount: 10 },
+    { label: "explicit null", maxResults: 10, count: null, expected: 5, defaultCount: 10 },
+    { label: "explicit fractional", maxResults: 10, count: 3.9, expected: 3, defaultCount: 10 },
+    { label: "explicit above limit", maxResults: 8, count: 20, expected: 10, defaultCount: 8 },
+    { label: "configured below range", maxResults: 0, count: undefined, expected: 5, defaultCount: 5 },
+    { label: "configured fractional", maxResults: 2.9, count: undefined, expected: 2, defaultCount: 2 },
+    { label: "configured above limit", maxResults: 20, count: undefined, expected: 10, defaultCount: 10 },
+    { label: "configured string", maxResults: "10", count: undefined, expected: 5, defaultCount: 5 },
+  ])("resolves $label without changing explicit-count behavior", async ({ maxResults, count, expected, defaultCount }) => {
+    authMock.resolveOmniRouteApiKey.mockResolvedValue("fixture-key");
+    const fetchMock = mockSearchResponse();
+    const tool = createTool({ searchConfig: { provider: "omniroute", maxResults } });
+
+    await tool.execute({ query: "fixture search", ...(count === undefined ? {} : { count }) });
+
+    const request = JSON.parse(String(fetchMock.mock.calls[0]?.[1]?.body));
+    expect(request.max_results).toBe(expected);
+    expect(tool.parameters).toMatchObject({
+      properties: { count: { description: `Number of results to return (1-10). Default: ${defaultCount}.` } },
+    });
+  });
+
+  it("keeps each tool's configured default independent", async () => {
+    authMock.resolveOmniRouteApiKey.mockResolvedValue("fixture-key");
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
+      new Response(JSON.stringify({ results: [] }), { headers: { "content-type": "application/json" } }),
+    );
+    const first = createTool({ searchConfig: { maxResults: 2 } });
+    const second = createTool({ searchConfig: { maxResults: 8 } });
+
+    await second.execute({ query: "second agent" });
+    await first.execute({ query: "first agent" });
+
+    expect(fetchMock.mock.calls.map(([, init]) => JSON.parse(String(init?.body)).max_results)).toEqual([8, 2]);
+  });
+
   it("uses the shared configured provider credential", async () => {
     authMock.resolveOmniRouteApiKey.mockResolvedValue("config-key");
     const fetchMock = mockSearchResponse();

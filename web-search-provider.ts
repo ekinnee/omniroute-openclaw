@@ -110,6 +110,7 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
     createTool: (ctx) => {
       const providerConfig = ctx.config?.models?.providers?.[OMNIROUTE_PROVIDER_ID];
       const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config });
+      const defaultSearchCount = resolveSearchCount(ctx.searchConfig?.maxResults);
 
       return {
         description:
@@ -125,7 +126,7 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
             },
             count: {
               type: "integer",
-              description: "Number of results to return (1-10). Default: 5.",
+              description: `Number of results to return (1-10). Default: ${defaultSearchCount}.`,
               minimum: 1,
               maximum: 10,
             },
@@ -173,7 +174,7 @@ export function createOmniRouteWebSearchProvider(): WebSearchProviderPlugin {
           const body: Record<string, unknown> = {
             model: "auto",
             query,
-            max_results: resolveSearchCount(args.count),
+            max_results: args.count === undefined ? defaultSearchCount : resolveSearchCount(args.count),
           };
           const freshness = resolveFreshness(
             typeof args.freshness === "string" ? args.freshness : undefined,
