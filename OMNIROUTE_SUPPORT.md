@@ -84,6 +84,12 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 
 ## Compatibility Notes
 
+- Image, video, music, and speech providers expose both synchronous readiness for
+  the supported `2026.7.1` floor and async readiness for newer hosts. The catalog
+  audit likewise prefers async config preparation when the public SDK exports it.
+  Legacy paths are used only when the async capability is absent, preserving the
+  floor/current/beta matrix without masking async failures. Remove these legacy
+  paths when the supported floor supplies the replacement APIs.
 - The asynchronous embedding-batch contract is present on OpenClaw `main` after 2026.9.4 and is not part of the current stable compatibility matrix. Do not import it or raise the plugin's OpenClaw floor until the first containing stable release is identified and packed-artifact compatibility is proven.
 - Plugin-owned guarded requests reject target `request.tls` overrides combined with `request.proxy.mode: "explicit-proxy"`, rather than silently dropping them. The guarded explicit-proxy policy in both OpenClaw 2026.7.1 and 2026.9.3 lacks an independent target TLS field; full support needs a public SDK contract. Direct and environment-proxy target TLS behavior is unchanged. This limitation applies to discovery, catalog audit, embeddings, image/video/music generation, speech, batch transcription, web fetch, and web search, not the separately owned chat or usage transports.
 - Web fetch is bounded by the plugin's guarded transport and rejects private, loopback, and other special-use target hostnames before forwarding. OpenClaw 2026.7.1 owns `maxChars` normalization and preserves only the standard text, final URL, content type, status, title, extractor, and truncation fields; OmniRoute's provider, depth, selector-wait, link, description, and screenshot fields therefore remain intentionally unprojected.

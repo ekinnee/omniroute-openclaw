@@ -6,6 +6,11 @@ Current release: `2.3.2`. See the [changelog](CHANGELOG.md) for version history
 and the [GitHub Release](https://github.com/ekinnee/omniroute-openclaw/releases/tag/v2.3.2)
 for the compatibility contract and verification record.
 
+The supported OpenClaw floor remains `2026.7.1`. On hosts that expose the async
+SDK APIs, provider readiness and standalone catalog auditing use awaited auth
+checks and cold config preparation. Older hosts use their existing synchronous
+APIs; a failed async operation is never retried through the older path.
+
 ## Quick Start
 
 ```bash

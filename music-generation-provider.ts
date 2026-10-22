@@ -1,7 +1,7 @@
 // OmniRoute music generation provider using public SDK registration contracts.
 import { generatedMusicAssetFromBase64 } from "openclaw/plugin-sdk/music-generation";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
-import { isOmniRouteConfigured, resolveOmniRouteApiKey } from "./auth.js";
+import { isOmniRouteConfigured, isOmniRouteConfiguredAsync, resolveOmniRouteApiKey } from "./auth.js";
 import {
   assertOmniRouteOk,
   downloadOmniRouteMusicAsset,
@@ -17,7 +17,9 @@ import {
 } from "./models.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
 
-type MusicGenerationProvider = Parameters<OpenClawPluginApi["registerMusicGenerationProvider"]>[0];
+type MusicGenerationProvider = Parameters<OpenClawPluginApi["registerMusicGenerationProvider"]>[0] & {
+  isConfiguredAsync: typeof isOmniRouteConfiguredAsync;
+};
 type MusicGenerationRequest = Parameters<MusicGenerationProvider["generateMusic"]>[0];
 type MusicGenerationResult = Awaited<ReturnType<MusicGenerationProvider["generateMusic"]>>;
 type GeneratedMusicAsset = MusicGenerationResult["tracks"][number];
@@ -188,6 +190,7 @@ export function buildOmniRouteMusicGenerationProvider(): MusicGenerationProvider
     id: OMNIROUTE_PROVIDER_ID,
     label: OMNIROUTE_LABEL,
     isConfigured: ({ cfg, agentDir }) => isOmniRouteConfigured({ cfg, agentDir }),
+    isConfiguredAsync: isOmniRouteConfiguredAsync,
     capabilities: {
       generate: {},
       edit: {

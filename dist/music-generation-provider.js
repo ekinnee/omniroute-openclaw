@@ -1,6 +1,6 @@
 // OmniRoute music generation provider using public SDK registration contracts.
 import { generatedMusicAssetFromBase64 } from "openclaw/plugin-sdk/music-generation";
-import { isOmniRouteConfigured, resolveOmniRouteApiKey } from "./auth.js";
+import { isOmniRouteConfigured, isOmniRouteConfiguredAsync, resolveOmniRouteApiKey } from "./auth.js";
 import { assertOmniRouteOk, downloadOmniRouteMusicAsset, OMNIROUTE_JSON_READ_OPTIONS, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
@@ -140,6 +140,7 @@ export function buildOmniRouteMusicGenerationProvider() {
         id: OMNIROUTE_PROVIDER_ID,
         label: OMNIROUTE_LABEL,
         isConfigured: ({ cfg, agentDir }) => isOmniRouteConfigured({ cfg, agentDir }),
+        isConfiguredAsync: isOmniRouteConfiguredAsync,
         capabilities: {
             generate: {},
             edit: {

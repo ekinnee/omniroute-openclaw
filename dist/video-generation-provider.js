@@ -1,4 +1,4 @@
-import { isOmniRouteConfigured, resolveOmniRouteApiKey } from "./auth.js";
+import { isOmniRouteConfigured, isOmniRouteConfiguredAsync, resolveOmniRouteApiKey } from "./auth.js";
 import { assertOmniRouteOk, OMNIROUTE_JSON_READ_OPTIONS, postOmniRouteJson, readOmniRouteJson, resolveOmniRouteHttpRequestConfig, } from "./http.js";
 import { OMNIROUTE_DEFAULT_BASE_URL, OMNIROUTE_LABEL, OMNIROUTE_PROVIDER_ID, } from "./models.js";
 import { resolveOmniRouteBaseUrl } from "./base-url.js";
@@ -83,6 +83,7 @@ export function buildOmniRouteVideoGenerationProvider() {
             },
         },
         isConfigured: ({ cfg, agentDir }) => isOmniRouteConfigured({ cfg, agentDir }),
+        isConfiguredAsync: isOmniRouteConfiguredAsync,
         async generateVideo(req) {
             const model = requireVideoModel(req.model);
             const apiKey = await resolveOmniRouteApiKey({

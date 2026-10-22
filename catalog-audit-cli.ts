@@ -4,7 +4,11 @@ import {
   type OmniRouteCatalogAuditReport,
 } from "./catalog-audit.js";
 import { resolveAgentDir, resolveDefaultAgentDir } from "openclaw/plugin-sdk/agent-runtime";
-import { getRuntimeConfig } from "openclaw/plugin-sdk/runtime-config-snapshot";
+import * as runtimeConfig from "openclaw/plugin-sdk/runtime-config-snapshot";
+
+const configSdk: typeof runtimeConfig & {
+  captureRuntimeConfigAsyncReader?: () => () => Promise<ReturnType<typeof runtimeConfig.getRuntimeConfig>>;
+} = runtimeConfig;
 
 type Writable = { write: (text: string) => unknown };
 
@@ -73,7 +77,9 @@ export async function runOmniRouteCatalogAuditCli(
     (options.stdout ?? process.stdout).write(`${OMNIROUTE_CATALOG_AUDIT_USAGE}\n`);
     return;
   }
-  const config = options.config ?? getRuntimeConfig();
+  const config = options.config ?? (configSdk.captureRuntimeConfigAsyncReader
+    ? await configSdk.captureRuntimeConfigAsyncReader()()
+    : runtimeConfig.getRuntimeConfig());
   const env = options.env ?? process.env;
   const agentDir = options.agentDir ?? (
     parsed.agentId
