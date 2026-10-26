@@ -101,3 +101,10 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 - Base URL precedence should remain consistent for local, remote, Docker, and cloud-hosted OmniRoute instances.
 - Live discovery should be auth-gated and cached by normalized base URL, auth profile, and a non-reversible fingerprint of the effective discovery credential. There is no static model fallback for offline picker surfaces.
 - The plugin composes its companion capability providers (embeddings, image generation, speech, batch transcription, web search, video generation, and music generation) through the `register` hook of `definePluginEntry`; future capabilities with existing SDK registration points can register the same way, and a different entry helper is only worth revisiting if a future capability requires custom registration flow.
+
+## Decision models: preparation only
+
+An internal System One codec and deterministic tests are prepared for Jev-style
+decisions. No decision provider or model catalog is registered. Activation awaits
+upstream protocol/discovery agreement and a compatible host transport contract;
+see [the preparation record](docs/development/decision-provider-preparation.md).
