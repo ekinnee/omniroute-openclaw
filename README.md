@@ -32,6 +32,19 @@ openclaw models list | grep omniroute
 
 OmniRoute appears as a model provider after authenticated discovery. The gateway URL is `models.providers.omniroute.baseUrl`; its default, `http://localhost:20128/v1`, works only when OmniRoute runs on the same host. For discovery, chat, embeddings, image, video and music generation, speech, batch transcription, web fetch, web search, usage, and the catalog audit, an explicit non-default provider URL wins; otherwise `OMNIROUTE_BASE_URL` is used before the localhost default. Select any chat-capable model or combo returned by your OmniRoute gateway; the available list depends on that gateway's configured upstream providers and API-key permissions.
 
+For an explicit provider-discovery refresh on current OpenClaw hosts, run
+`openclaw models list --refresh`. OmniRoute's authenticated listing remains the
+source of model availability; OpenClaw's hosted catalog does not replace it.
+Text models advertised with `supported_endpoints: ["responses"]` are included
+because OmniRoute translates their requests through `/v1/chat/completions`.
+Their advertised limits and capabilities are preserved just like other chat rows.
+
+Failed chat discovery reports `unavailable` to hosts that support discovery
+outcomes, allowing OpenClaw to retain the same credential's last good list and
+retry. Older supported hosts still receive an empty provider projection without
+a thrown catalog-hook error. A valid empty listing or missing credential remains
+a no-result response; the plugin does not invent fallback models.
+
 ## Upgrading to 2.0.0
 
 Version 2 removes the plugin's synthetic `omniroute/auto` catalog entry and automatic default-model selection. Existing provider configuration is preserved, but it is not rewritten to choose a replacement model.

@@ -860,7 +860,9 @@ describe("OmniRoute provider catalog", () => {
       }),
     );
 
-    expect(catalog).toBeNull();
+    expect(catalog).toEqual({
+      providers: {}, outcomes: [{ provider: "omniroute", status: "unavailable" }],
+    });
   });
 
   it("applies configured request headers and alternate auth to live catalog discovery", async () => {
@@ -909,7 +911,7 @@ describe("OmniRoute provider catalog", () => {
           request: { allowPrivateNetwork: false },
         }),
       ),
-    ).resolves.toBeNull();
+    ).rejects.toThrow();
 
     expect(fetchMock).not.toHaveBeenCalled();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("Blocked hostname"));
@@ -929,7 +931,7 @@ describe("OmniRoute provider catalog", () => {
           apiKey: "oversized-discovery-key",
         }),
       ),
-    ).resolves.toBeNull();
+    ).rejects.toThrow("response exceeded");
 
     expect(warnSpy).toHaveBeenCalledWith(
       expect.stringContaining("response exceeded 4194304 bytes (4194305 bytes received)"),
@@ -972,13 +974,13 @@ describe("OmniRoute provider catalog", () => {
       new Error(`request failed at ${sensitiveUrl}`),
     );
 
-    await expect(
-      buildLiveOmniRouteProvider(
-        mockCatalogContext({ baseUrl: sensitiveUrl, apiKey: "discovery-secret" }),
-      ),
-    ).resolves.toBeNull();
+    const failure = await buildLiveOmniRouteProvider(
+      mockCatalogContext({ baseUrl: sensitiveUrl, apiKey: "discovery-secret" }),
+    ).catch((error: unknown) => error);
+    expect(failure).toBeInstanceOf(Error);
+    expect((failure as Error).cause).toBeUndefined();
 
-    const rendered = String(warnSpy.mock.calls[0]?.[0]);
+    const rendered = `${String(warnSpy.mock.calls[0]?.[0])} ${String(failure)}`;
     expect(rendered).toContain("https://gateway.example/v1");
     expect(rendered).not.toContain("user");
     expect(rendered).not.toContain("secret");
@@ -1215,7 +1217,7 @@ describe("OmniRoute provider catalog", () => {
     });
 
     rejectExpiredRequest(new Error("expired request failed"));
-    await expect(expiredLoad).resolves.toBeNull();
+    await expect(expiredLoad).rejects.toThrow("expired request failed");
     await expect(buildLiveOmniRouteProvider(context)).resolves.toMatchObject({
       models: [{ id: "replacement-model" }],
     });
