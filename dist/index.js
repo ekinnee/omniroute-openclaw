@@ -12,7 +12,7 @@ import { buildOmniRouteVideoGenerationProvider } from "./video-generation-provid
 import { buildOmniRouteMusicGenerationProvider } from "./music-generation-provider.js";
 import { buildOmniRouteSpeechProvider } from "./speech-provider.js";
 import { omniRouteMediaUnderstandingProvider } from "./audio-transcription-provider.js";
-import { buildOmniRouteReplayPolicy, buildOmniRouteThinkingProfile, } from "./provider-compat.js";
+import { buildOmniRouteReplayPolicy, buildOmniRouteThinkingProfile, classifyOmniRouteFailoverReason, } from "./provider-compat.js";
 import { fetchOmniRouteUsage, resolveOmniRouteUsageAuth } from "./usage.js";
 const plugin = definePluginEntry({
     id: OMNIROUTE_PROVIDER_ID,
@@ -56,6 +56,7 @@ const plugin = definePluginEntry({
             },
             buildReplayPolicy: buildOmniRouteReplayPolicy,
             resolveThinkingProfile: buildOmniRouteThinkingProfile,
+            classifyFailoverReason: classifyOmniRouteFailoverReason,
             isModernModelRef: () => true,
             resolveUsageAuth: resolveOmniRouteUsageAuth,
             fetchUsageSnapshot: fetchOmniRouteUsage,
