@@ -39,12 +39,60 @@ function normalizeUsageSummary(text) {
     const summary = text.trim().replace(/\n{3,}/gu, "\n\n");
     return summary && summary.length <= MAX_USAGE_RESPONSE_CHARS ? summary : undefined;
 }
+function record(value) {
+    return value !== null && typeof value === "object" && !Array.isArray(value)
+        ? value : undefined;
+}
+function quotaNumber(value) {
+    if (typeof value !== "number" && !(typeof value === "string" && value.trim()))
+        return undefined;
+    const number = Number(value);
+    return Number.isFinite(number) && number >= 0 ? number : undefined;
+}
+function rawUsedPercent(quota) {
+    const used = quotaNumber(quota.used);
+    const total = quotaNumber(quota.total);
+    const remaining = quotaNumber(quota.remainingPercentage) ?? quotaNumber(quota.remaining);
+    const percent = quotaNumber(quota.usedPercentage) ??
+        (used !== undefined && total !== undefined && total > 0 ? used / total * 100 : undefined) ??
+        (quota.total === undefined && used !== undefined && used <= 100 ? used : undefined) ??
+        (remaining !== undefined && remaining <= 100 ? 100 - remaining : undefined);
+    return percent !== undefined && Number.isFinite(percent) ? Math.min(100, percent) : undefined;
+}
+function parseJsonUsage(value) {
+    const payload = record(value);
+    if (payload?.allowed === false)
+        return errorSnapshot("OmniRoute usage request was refused");
+    if (payload?.allowed !== true)
+        return errorSnapshot("OmniRoute returned invalid usage data");
+    // The gateway selects the applicable connection. Never fill gaps from providers[].
+    const quotas = record(record(payload.provider)?.quotas);
+    const windows = [];
+    for (const [label, value] of Object.entries(quotas ?? {})) {
+        const quota = record(value);
+        if (!label.trim() || !quota || quota.unlimited === true)
+            continue;
+        const usedPercent = rawUsedPercent(quota);
+        if (usedPercent === undefined)
+            continue;
+        const resetAt = typeof quota.resetAt === "string" ? Date.parse(quota.resetAt) : NaN;
+        windows.push({ label, usedPercent, ...(Number.isFinite(resetAt) ? { resetAt } : {}) });
+    }
+    return windows.length ? {
+        provider: OMNIROUTE_PROVIDER_ID,
+        displayName: OMNIROUTE_LABEL,
+        windows,
+        summary: "Raw provider quota consumption",
+    } : errorSnapshot("OmniRoute returned no usage data");
+}
 export async function fetchOmniRouteUsage(ctx) {
     let response;
     try {
-        response = await ctx.fetchFn(omniRouteUsageUrl(resolveUsageBaseUrl(ctx)), {
+        const url = new URL(omniRouteUsageUrl(resolveUsageBaseUrl(ctx)));
+        url.searchParams.set("format", "json");
+        response = await ctx.fetchFn(url.toString(), {
             headers: {
-                Accept: "text/plain",
+                Accept: "application/json",
                 Authorization: `Bearer ${ctx.token}`,
             },
             signal: AbortSignal.timeout(ctx.timeoutMs),
@@ -74,6 +122,19 @@ export async function fetchOmniRouteUsage(ctx) {
             return errorSnapshot("OmniRoute usage response is too large");
         }
         return errorSnapshot("OmniRoute usage endpoint is unavailable");
+    }
+    const mediaType = response.headers.get("content-type")?.split(";", 1)[0]?.trim().toLowerCase();
+    const legacy = (!mediaType || mediaType === "text/plain") &&
+        !["{", "["].includes(text.trimStart()[0]) && /(?:^|\n)Provider quota(?:\r?\n|$)/u.test(text);
+    if (!legacy) {
+        if (!text.trim())
+            return errorSnapshot("OmniRoute returned no usage data");
+        try {
+            return parseJsonUsage(JSON.parse(text));
+        }
+        catch {
+            return errorSnapshot("OmniRoute returned invalid usage data");
+        }
     }
     const summary = normalizeUsageSummary(text);
     return {

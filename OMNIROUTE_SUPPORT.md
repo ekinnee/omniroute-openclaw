@@ -13,7 +13,7 @@ OpenClaw's provider plugin guidance says provider plugins own model catalogs, au
 - Text model API: `openai-completions`
 - Live chat model discovery: `GET /v1/models`
 - Read-only catalog metadata audit: `omniroute-catalog-audit`
-- Provider quota usage: `GET /api/usage/om-usage`, scoped to the configured API key and its permitted connections
+- Provider quota usage: `GET /api/usage/om-usage?format=json`, scoped to the configured API key and gateway-selected connection; raw quota consumption, with bounded same-response legacy text compatibility
 - Embedding provider: `omniroute`, backed by `POST /v1/embeddings`
 - Image generation and editing provider: `omniroute`, backed by `POST /v1/images/generations` and `POST /v1/images/edits`
 - Video generation provider: `omniroute`, backed by `POST /v1/videos/generations`

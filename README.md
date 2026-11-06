@@ -254,7 +254,17 @@ transcription is not supported by this contract.
 11. **Batch audio transcription** — Audio requests use OmniRoute's multipart `POST /v1/audio/transcriptions` endpoint with an explicitly configured model. OpenClaw's public multipart helper preserves the upload filename and MIME type, while bounded response validation rejects missing transcript text.
 12. **Web search** — Search requests use OmniRoute's `POST /v1/search` endpoint. The plugin registers as a web search provider automatically.
 13. **Web fetch** — Fetch requests use OmniRoute's `POST /v1/web/fetch` endpoint with markdown extraction and metadata enabled. The adapter preserves the public OpenClaw result fields and does not implement a second provider fallback policy.
-13. **Provider quota usage** — OpenClaw status and usage views can read OmniRoute's credential-scoped cached quota snapshot from `GET /api/usage/om-usage`. Enable usage visibility for that OmniRoute API key; a key without that permission reports an explicit unavailable status and never exposes other gateway connections.
+13. **Provider quota usage** — OpenClaw status and usage views can read OmniRoute's credential-scoped cached quota snapshot from `GET /api/usage/om-usage?format=json`. Enable usage visibility for that OmniRoute API key; a key without that permission reports an explicit unavailable status and never exposes other gateway connections.
+
+Usage windows use raw consumption from the gateway-selected connection, without
+combining other connections or applying quota cutoffs. Valid quota labels and
+reset times are preserved; malformed or unlimited windows are omitted, and
+over-quota percentages are capped at 100 for display. Older gateways returning
+recognizable legacy text still work through the existing bounded parser. That
+text reports cutoff-adjusted allowance, so percentages can differ: 60% raw usage
+with a 25% cutoff is 60% used in JSON, while legacy `20% left` is 80% used.
+Malformed JSON, structured refusals and HTTP failures do not trigger text fallback
+or a second request.
 
 Temperature suppression and arbitrary provider-specific request flags are not inferred from catalog rows. They require future transport-level support and validation.
 
