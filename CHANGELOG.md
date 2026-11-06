@@ -7,6 +7,49 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 
 ## [Unreleased]
 
+## [2.5.0] - 2026-11-06
+
+### Fixed
+
+- Discover Responses-backed text models without losing their advertised context
+  and output limits ([#94](https://github.com/ekinnee/omniroute-openclaw/issues/94),
+  [PR #97](https://github.com/ekinnee/omniroute-openclaw/pull/97)).
+- Keep a missing upstream provider's structured `provider_not_configured` 401
+  from cooling down an otherwise healthy shared OmniRoute credential on hosts
+  that invoke the provider classification hook. Genuine authentication failures
+  retain normal handling ([#95](https://github.com/ekinnee/omniroute-openclaw/issues/95),
+  [PR #98](https://github.com/ekinnee/omniroute-openclaw/pull/98)).
+  Both user reports came from [Aaron Echols](https://github.com/dasunsrule32).
+- Report failed chat discovery so newer hosts can retain and retry the last good
+  listing; valid empty results and missing credentials remain distinct
+  ([#96](https://github.com/ekinnee/omniroute-openclaw/issues/96), PR #97).
+- Prefer nonempty decoded inline video bytes when a response also contains a
+  URL. URL-only materialization and cleanup remain open in
+  [#50](https://github.com/ekinnee/omniroute-openclaw/issues/50)
+  ([PR #100](https://github.com/ekinnee/omniroute-openclaw/pull/100)).
+
+### Added
+
+- Prefer structured JSON usage from the gateway-selected provider's quotas,
+  preserving raw consumption and reset times. Recognizable legacy text is
+  supported on the same successful response; malformed JSON or HTTP failures
+  cause no fallback request. JSON percentages can differ from cutoff-adjusted
+  legacy percentages ([#79](https://github.com/ekinnee/omniroute-openclaw/issues/79),
+  [PR #99](https://github.com/ekinnee/omniroute-openclaw/pull/99)).
+
+### Internal preparation
+
+- Include the pure, unregistered System One codec from
+  [PR #92](https://github.com/ekinnee/omniroute-openclaw/pull/92).
+  This does not enable Jev or native OpenAI Decisions; activation remains open
+  in [#93](https://github.com/ekinnee/omniroute-openclaw/issues/93).
+
+### Compatibility
+
+- Minimum OpenClaw version remains `2026.7.1`. Its pre-existing provider-hook
+  loader limitation prevents the #95 behavioral fix on that host; newer verified
+  hosts are covered. This release does not add native Responses transport.
+
 ## [2.4.0] - 2026-10-22
 
 ### Added
@@ -245,7 +288,8 @@ and this project uses [Semantic Versioning](https://semver.org/spec/v2.0.0.html)
 - Added environment and onboarding-based API-key configuration.
 - Added custom gateway configuration and the initial `omniroute/auto` model.
 
-[Unreleased]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.4.0...HEAD
+[Unreleased]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.5.0...HEAD
+[2.5.0]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.4.0...v2.5.0
 [2.4.0]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.2...v2.4.0
 [2.3.2]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/ekinnee/omniroute-openclaw/compare/v2.3.0...v2.3.1
