@@ -45,6 +45,15 @@ retry. Older supported hosts still receive an empty provider projection without
 a thrown catalog-hook error. A valid empty listing or missing credential remains
 a no-result response; the plugin does not invent fallback models.
 
+When OmniRoute returns HTTP 401 with the structured code `provider_not_configured`,
+the selected route fails as a request/configuration error without cooling down
+the shared OmniRoute credential. Connect the upstream account or select an
+available route. Other authentication and permission errors keep OpenClaw's
+normal handling; the plugin does not exempt generic 401 or 403 responses.
+This behavior is verified on OpenClaw 2026.10.10 and newer tested hosts. The
+supported 2026.7.1 package has an existing error-hook loading limitation, so
+install compatibility with that floor does not provide this classification fix.
+
 ## Upgrading to 2.0.0
 
 Version 2 removes the plugin's synthetic `omniroute/auto` catalog entry and automatic default-model selection. Existing provider configuration is preserved, but it is not rewritten to choose a replacement model.

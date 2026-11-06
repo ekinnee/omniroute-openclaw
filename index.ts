@@ -26,6 +26,7 @@ import { omniRouteMediaUnderstandingProvider } from "./audio-transcription-provi
 import {
   buildOmniRouteReplayPolicy,
   buildOmniRouteThinkingProfile,
+  classifyOmniRouteFailoverReason,
 } from "./provider-compat.js";
 import { fetchOmniRouteUsage, resolveOmniRouteUsageAuth } from "./usage.js";
 
@@ -71,6 +72,7 @@ const plugin: OpenClawPluginDefinition = definePluginEntry({
       },
       buildReplayPolicy: buildOmniRouteReplayPolicy,
       resolveThinkingProfile: buildOmniRouteThinkingProfile,
+      classifyFailoverReason: classifyOmniRouteFailoverReason,
       isModernModelRef: () => true,
       resolveUsageAuth: resolveOmniRouteUsageAuth,
       fetchUsageSnapshot: fetchOmniRouteUsage,
