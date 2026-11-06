@@ -33,9 +33,9 @@ describe("OmniRoute usage reporting", () => {
       fetchFn,
     } as never);
 
-    expect(fetchFn).toHaveBeenCalledWith("https://environment.example/api/usage/om-usage", {
+    expect(fetchFn).toHaveBeenCalledWith("https://environment.example/api/usage/om-usage?format=json", {
       headers: {
-        Accept: "text/plain",
+        Accept: "application/json",
         Authorization: "Bearer usage-key",
       },
       signal: expect.any(AbortSignal),
@@ -87,9 +87,9 @@ describe("OmniRoute usage reporting", () => {
       fetchFn,
     } as never);
 
-    expect(fetchFn).toHaveBeenCalledWith("https://omniroute.example/api/usage/om-usage", {
+    expect(fetchFn).toHaveBeenCalledWith("https://omniroute.example/api/usage/om-usage?format=json", {
       headers: {
-        Accept: "text/plain",
+        Accept: "application/json",
         Authorization: "Bearer usage-key",
       },
       signal: expect.any(AbortSignal),
@@ -182,7 +182,7 @@ describe("OmniRoute usage reporting", () => {
     { suffix: "", oversized: false },
     { suffix: "x", oversized: true },
   ])("enforces the UTF-8 byte limit (oversized: $oversized)", async ({ suffix, oversized }) => {
-    const text = "é".repeat(16_384) + suffix;
+    const text = "Provider quota\n" + "é".repeat(16_376) + "x" + suffix;
     const snapshot = await fetchOmniRouteUsage({
       config: {},
       env: {},
