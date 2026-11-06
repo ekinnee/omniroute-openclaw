@@ -84,6 +84,15 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 
 ## Compatibility Notes
 
+- Responses-backed text rows are discovered from OmniRoute's advertised
+  `responses` endpoint token and keep their actual limits and capabilities.
+  Requests still use OmniRoute's translating `/v1/chat/completions` endpoint;
+  this does not add native Responses or Decisions transport.
+- Failed chat discovery returns an `unavailable` outcome for newer hosts to
+  retain and retry through OpenClaw's existing catalog owner. The `2026.7.1`
+  floor safely ignores that extra metadata and receives no fabricated provider.
+  Missing auth and successful empty listings remain distinct from failures.
+
 - Image, video, music, and speech providers expose both synchronous readiness for
   the supported `2026.7.1` floor and async readiness for newer hosts. The catalog
   audit likewise prefers async config preparation when the public SDK exports it.
