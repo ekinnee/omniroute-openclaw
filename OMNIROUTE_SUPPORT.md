@@ -84,6 +84,14 @@ The packaged catalog audit reads the same OpenClaw config, agent-scoped credenti
 
 ## Compatibility Notes
 
+- A direct-route HTTP 401 with exact structured code `provider_not_configured`
+  is a terminal request/configuration failure, not a shared-key auth failure.
+  The selected route still fails; healthy sibling routes remain usable. Other
+  codes/statuses retain normal OpenClaw auth/failover handling.
+  Verified host policies: 2026.10.10, 2026.11.1 and 2026.11.5-beta.1. The packaged
+  2026.7.1 host's pre-existing error-hook resolution limitation prevents this
+  behavioral fix there; package/SDK compatibility with that floor is unchanged.
+
 - Responses-backed text rows are discovered from OmniRoute's advertised
   `responses` endpoint token and keep their actual limits and capabilities.
   Requests still use OmniRoute's translating `/v1/chat/completions` endpoint;

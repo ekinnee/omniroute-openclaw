@@ -6,6 +6,19 @@ import type {
   ProviderThinkingProfile,
 } from "openclaw/plugin-sdk/plugin-entry";
 
+/** An unconfigured upstream route does not invalidate the shared gateway key. */
+export function classifyOmniRouteFailoverReason(ctx: {
+  provider?: string;
+  status?: number;
+  code?: string;
+}): "format" | undefined {
+  // A terminal request/configuration failure avoids retrying this route or
+  // cooling healthy sibling routes. Genuine auth errors retain host handling.
+  return ctx.provider === "omniroute" && ctx.status === 401 && ctx.code === "provider_not_configured"
+    ? "format"
+    : undefined;
+}
+
 const OMNIROUTE_PROFILE_LEVELS = [
   "off",
   "minimal",
