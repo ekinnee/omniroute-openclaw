@@ -149,6 +149,14 @@ Image editing requires OmniRoute v3.8.11 or newer. For an edit, supply exactly o
 
 The plugin does not default image generation or editing to `auto`; use a model that OmniRoute advertises for the requested operation.
 
+### Video Generation
+
+When OmniRoute returns both inline `b64_json` video data and a URL, the plugin
+prefers the decoded inline bytes and returns a buffered asset. If inline data is
+absent or decodes to no bytes, an available URL keeps its existing behavior.
+URL-only results are still forwarded to OpenClaw; guarded materialization and
+cleanup remain tracked in [#50](https://github.com/ekinnee/omniroute-openclaw/issues/50).
+
 ### Web Search
 
 OmniRoute can serve OpenClaw web search requests through `POST /v1/search`.
