@@ -67,6 +67,16 @@ function parseVideoResponse(payload: unknown): GeneratedVideoAsset[] {
     const fileName = typeof item.file_name === "string" && item.file_name.trim()
       ? { fileName: item.file_name }
       : {};
+    if (typeof item.b64_json === "string" && item.b64_json.trim()) {
+      const buffer = Buffer.from(item.b64_json, "base64");
+      if (buffer.length > 0) {
+        return {
+          buffer,
+          mimeType,
+          ...fileName,
+        };
+      }
+    }
     if (typeof item.url === "string" && item.url.trim()) {
       return {
         url: item.url,
@@ -74,18 +84,7 @@ function parseVideoResponse(payload: unknown): GeneratedVideoAsset[] {
         ...fileName,
       };
     }
-    if (typeof item.b64_json !== "string" || !item.b64_json.trim()) {
-      throw new Error("OmniRoute video generation response missing video data");
-    }
-    const buffer = Buffer.from(item.b64_json, "base64");
-    if (buffer.length === 0) {
-      throw new Error("OmniRoute video generation response missing video data");
-    }
-    return {
-      buffer,
-      mimeType,
-      ...fileName,
-    };
+    throw new Error("OmniRoute video generation response missing video data");
   });
 }
 
