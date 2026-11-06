@@ -729,25 +729,29 @@ export async function buildLiveOmniRouteProvider(
     };
   } catch (err) {
     const baseUrl = resolveOmniRouteBaseUrl({ config: ctx.config, env: ctx.env });
-    console.warn(
-      `[omniroute] Live model discovery failed (${redactOmniRouteBaseUrl(baseUrl)}): ${
-        redactLiveDiscoveryError(err)
-      }`,
-    );
-    return null;
+    const message = `[omniroute] Live model discovery failed (${redactOmniRouteBaseUrl(baseUrl)}): ${
+      redactLiveDiscoveryError(err)
+    }`;
+    console.warn(message);
+    throw new Error(message);
   }
 }
 
 export async function buildOmniRouteCatalog(
   ctx: ProviderCatalogContext,
 ): Promise<ProviderCatalogResult> {
-  const provider = await buildLiveOmniRouteProvider(ctx);
-  if (!provider) {
-    return null;
+  try {
+    const provider = await buildLiveOmniRouteProvider(ctx);
+    return provider ? { provider } : null;
+  } catch {
+    // New hosts retain/retry unavailable discovery. Older hosts safely read the
+    // empty providers projection without receiving a newly rejecting hook.
+    const failed = {
+      providers: {},
+      outcomes: [{ provider: OMNIROUTE_PROVIDER_ID, status: "unavailable" as const }],
+    };
+    return failed;
   }
-  return {
-    provider,
-  };
 }
 
 export async function buildOmniRouteMediaCatalog(

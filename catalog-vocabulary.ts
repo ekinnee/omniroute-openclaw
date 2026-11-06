@@ -19,6 +19,8 @@ const NON_CHAT_MODEL_TYPES = new Set([
   "music",
 ]);
 const CHAT_ENDPOINTS = new Set([
+  // OmniRoute translates Responses-backed text routes for chat-completions clients.
+  "responses",
   "chat",
   "chat-completions",
   "chat_completions",
