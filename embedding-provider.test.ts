@@ -198,6 +198,102 @@ describe("OmniRoute embedding provider", () => {
     expect(new Headers(requestInit.headers).get("Authorization")).toBe("Bearer resolved-key");
   });
 
+  it("inherits provider credentials for a same-origin embedding override", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({ data: [{ embedding: [0.1] }] }),
+    );
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    vi.stubEnv("OMNIROUTE_BASE_URL", "https://gateway.example/v1");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: {
+            omniroute: {
+              apiKey: "provider-key",
+              request: { headers: { "X-Provider-Header": "provider-value" } },
+            },
+          },
+        },
+      } as never,
+      remote: { baseUrl: "https://gateway.example:443/memory/v1" },
+      model: "embedding-model",
+    });
+
+    await expect(result.provider?.embed("hello")).resolves.toEqual([0.1]);
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      "https://gateway.example/memory/v1/embeddings",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("Authorization")).toBe("Bearer provider-key");
+    expect(headers.get("X-Provider-Header")).toBe("provider-value");
+  });
+
+  it.each([
+    "https://memory.example/v1",
+    "https://gateway.example:8443/v1",
+    "http://gateway.example/v1",
+  ])("requires an embedding key before dispatching to %s", async (baseUrl) => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockRejectedValue(
+      new Error("Unexpected embedding request"),
+    );
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: { omniroute: { baseUrl: "https://gateway.example/v1", apiKey: "provider-key" } },
+        },
+      } as never,
+      remote: { baseUrl },
+      model: "embedding-model",
+    });
+
+    await expect(result.provider?.embedBatch(["hello"])).rejects.toThrow(
+      "OmniRoute embeddings require memorySearch.remote.apiKey for a different origin",
+    );
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("uses only the dedicated credential and embedding headers at a different origin", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      Response.json({ data: [{ embedding: [0.1] }] }),
+    );
+    const { omniRouteEmbeddingProviderAdapter } = await import("./embedding-provider.js");
+    const result = await omniRouteEmbeddingProviderAdapter.create({
+      config: {
+        models: {
+          providers: {
+            omniroute: {
+              baseUrl: "https://gateway.example/v1",
+              apiKey: "provider-key",
+              request: {
+                auth: { mode: "header", headerName: "X-Provider-Auth", value: "provider-auth" },
+                headers: { "X-Provider-Header": "provider-value" },
+              },
+            },
+          },
+        },
+      } as never,
+      remote: {
+        baseUrl: "https://memory.example/v1",
+        apiKey: "embedding-key",
+        headers: { "X-Embedding-Header": "embedding-value" },
+      },
+      model: "embedding-model",
+    });
+
+    await expect(result.provider?.embed("hello")).resolves.toEqual([0.1]);
+    expect(fetchMock).toHaveBeenCalledExactlyOnceWith(
+      "https://memory.example/v1/embeddings",
+      expect.objectContaining({ method: "POST" }),
+    );
+    const headers = new Headers(fetchMock.mock.calls[0]?.[1]?.headers);
+    expect(headers.get("Authorization")).toBe("Bearer embedding-key");
+    expect(headers.get("X-Embedding-Header")).toBe("embedding-value");
+    expect(headers.has("X-Provider-Auth")).toBe(false);
+    expect(headers.has("X-Provider-Header")).toBe(false);
+  });
+
   it("forwards per-call embedding types and text parts", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation(async () =>
       new Response(JSON.stringify({ data: [{ index: 0, embedding: [0.1] }] }), {
