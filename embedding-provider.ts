@@ -142,7 +142,20 @@ async function requestEmbeddings(
   inputs: EmbeddingInput[],
   callOptions?: EmbeddingCallOptions,
 ): Promise<number[][]> {
-  const apiKey = readRemoteApiKey(options) ?? (await resolveOmniRouteApiKey({
+  const baseUrl = readBaseUrl(options);
+  const embeddingUrl = URL.parse(baseUrl);
+  if (embeddingUrl?.protocol !== "http:" && embeddingUrl?.protocol !== "https:") {
+    throw new Error("Invalid URL: must be http or https");
+  }
+  const providerUrl = URL.parse(resolveOmniRouteBaseUrl({ config: options.config }));
+  const sharesProviderOrigin = providerUrl?.protocol === embeddingUrl.protocol &&
+    providerUrl.origin === embeddingUrl.origin;
+
+  const remoteApiKey = readRemoteApiKey(options);
+  if (!remoteApiKey && !sharesProviderOrigin) {
+    throw new Error("OmniRoute embeddings require memorySearch.remote.apiKey for a different origin");
+  }
+  const apiKey = remoteApiKey ?? (await resolveOmniRouteApiKey({
     cfg: options.config,
     agentDir: options.agentDir,
   }));
@@ -150,11 +163,15 @@ async function requestEmbeddings(
     throw new Error("OmniRoute API key missing");
   }
 
-  const providerConfig = readProviderConfig(options);
+  const providerRequest = readProviderConfig(options)?.request;
   const http = resolveOmniRouteHttpRequestConfig({
-    baseUrl: readBaseUrl(options),
+    baseUrl,
     defaultBaseUrl: OMNIROUTE_DEFAULT_BASE_URL,
-    request: providerConfig?.request,
+    // Keep the proxy and private-network policy for a different configured origin.
+    request: sharesProviderOrigin ? providerRequest : {
+      allowPrivateNetwork: providerRequest?.allowPrivateNetwork,
+      proxy: providerRequest?.proxy,
+    },
     defaultHeaders: {
       Accept: "application/json",
       Authorization: `Bearer ${apiKey}`,

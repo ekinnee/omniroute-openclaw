@@ -91,7 +91,7 @@ The empty `models` array is intentional: OpenClaw requires it for an authored cu
 
 ### Transport TLS limitation
 
-For plugin-owned discovery, catalog audit, embeddings, image/video/music generation, speech, batch transcription, and search requests, target TLS overrides in `models.providers.omniroute.request.tls` cannot be combined with `request.proxy.mode: "explicit-proxy"`. The plugin rejects this combination before making the request because the guarded SDK transport cannot represent independent target TLS settings for an explicit proxy. Direct and `env-proxy` transport retain support for target TLS overrides. This does not change the compatibility floor or OpenClaw-owned chat transport.
+For plugin-owned discovery, catalog audit, same-origin embeddings, image/video/music generation, speech, batch transcription, and search requests, target TLS overrides in `models.providers.omniroute.request.tls` cannot be combined with `request.proxy.mode: "explicit-proxy"`. The plugin rejects this combination before making the request because the guarded SDK transport cannot represent independent target TLS settings for an explicit proxy. Direct and `env-proxy` transport retain support for target TLS overrides. This does not change the compatibility floor or OpenClaw-owned chat transport.
 
 ### Catalog Metadata Audit
 
@@ -127,6 +127,8 @@ Configure a specific embedding model from OmniRoute's `GET /v1/models` response:
 ```
 
 The plugin does not default embeddings to `auto`. Embedding model and dimensionality are part of the vector index identity, so changing either can invalidate an existing index or make queries fail.
+
+A `memorySearch.remote.baseUrl` on the same origin as the effective OmniRoute gateway can use the provider credential. If the scheme, hostname, or effective port differs, set a dedicated `memorySearch.remote.apiKey`. The alternate endpoint uses that key and any embedding-specific headers. Embeddings inherit provider-wide authentication, headers, and target TLS settings only when the configured URL shares the gateway's origin. The configured proxy and private-network policy still apply.
 
 ### Image Generation
 
